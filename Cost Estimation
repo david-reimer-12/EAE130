@@ -1,109 +1,107 @@
 import xlrd
+
 # Open Excel file
 workbook = xlrd.open_workbook('path/to/your/excel_file.xls')
-sheet = workbook.sheet_by_index(0) 
+sheet = workbook.sheet_by_index(0)
 
 # Constant Variables
-CPI = ??? # Consumer Price Index
-Q = 1 # Number aircraft produced over 5 years
-y = 2025 # year of production
+CPI = ???  # Consumer Price Index (https://www.bls.gov/data/inflation_calculator.htm)
+Q = 1  # Number of aircraft produced over 5 years
+y = 2025  # Year of production
+W_Airframe = (READ IN)  # Example airframe weight (replace with actual value)
+V_H = ???  # Maximum level airspeed (replace with actual value)
+Q_M = ???  # Number of aircraft produced in one month
+Q_Proto = ???  # Number of prototype aircraft to be produced
 
-Questions
-What is V_H
-What is Q_M
+class ConceptOptions:
+    taper = "No"
+    composites = "No"
+    flaps = "Yes"
+
+concept_options = ConceptOptions()
 
 def Engineering_Cost(concept_number):
-    i = concept_number + 1 # offset by 1 for cell number in excel
-    W_structural = sheet.cell_value(3, i) #Structural Weight (40-50% of empty weight)
-    V_max = sheet.cell_value(2,i) # read excel (Max Level Airspeed)
-
-    # Engineering Cost Factors (Finger et al. 2019)
-    F_cert = 0.67 # LSA Certification
-    # N/A F_comp --> factor for 100% composites
-    # N/A F_CF --> factor for complex flap system 
-    F_Press = 1.03 # factor for pressurized cabin
-    F_HyE = 1.33 # factor for hybrid-electric propulsion (may range from 1.33-1.66)
-
-    R_E = 2.576*y - 5058 # Hourly rate of Engineers (Nicholai & Carichner) 
-
-    Cost_of_Engineering = 0.083 * W_structural^0.791 * V_max^1.521 * Q^0.183 *  F_cert * F_press * F_HyE * CPI
-    print('The Cost of Engineering for Concept {concept_number} is {Cost_of_Engineering}')
+    F_Cert = 0.67  # LSA Certification
+    F_Comp = 2 if concept_options.composites == "Yes" else 1
+    F_CF = 1.03 if concept_options.flaps == "Yes" else 1
+    F_Press = 1.03
+    F_HyE = 1.33
+    R_ENG = 2.576 * y - 5058  # Hourly rate of engineers
+    Cost_of_Engineering = (0.083 * W_Airframe**0.791 * V_H**1.521 * Q**0.183 * F_Cert * F_CF * F_Comp * 
+                           F_Press * F_HyE * R_ENG * CPI)
+    print(f'The Cost of Engineering for Concept {concept_number} is {Cost_of_Engineering}')
+    return Cost_of_Engineering
 
 def Tooling_Cost(concept_number):
-    i = concept_number + 1 # offset by 1 for cell number in excel
-    W_Airframe = sheet.cell_value(3, i) #Airframe Weight (40-50% of empty weight)
-    V_H = sheet.cell_value(2,i) # read excel (??? Airspeed)
-    
-    # Tooling Cost Factors (Finger et al. 2019)
-    F_cert = # LSA Certification
-    # N/A F_comp --> factor for 100% composites
-    # N/A F_CF --> factor for complex flap system 
-    F_Press =  # factor for pressurized cabin
-    F_HyE =  # factor for hybrid-electric propulsion (may range from 1.33-1.66)
-
-    R_Tool =  # (Nicholai & Carichner) 
-    Cost_of_Tooling = 2.1036 * W_Airframe^0.764 * V_H^0.899 * Q^0.178 * Q_M^0.066 * F_Taper * F_Comp * F_Press * F_HyE * R_Tool * CPI
-    print('The Cost of Tooling for Concept {concept_number} is {Cost_of_Tooling}')
-
+    F_Comp = 2 if concept_options.composites == "Yes" else 1
+    F_CF = 1.02 if concept_options.flaps == "Yes" else 1
+    F_Taper = 0.95 if concept_options.taper == "Yes" else 1
+    F_Press = 1.01
+    F_HyE = 1.10
+    R_Tool = 2.883 * y - 5058
+    Cost_of_Tooling = (2.1036 * W_Airframe**0.764 * V_H**0.899 * Q**0.178 * Q_M**0.066 * F_Taper * 
+                       F_CF * F_Comp * F_Press * F_HyE * R_Tool * CPI)
+    print(f'The Cost of Tooling for Concept {concept_number} is {Cost_of_Tooling}')
+    return Cost_of_Tooling
 
 def Manufacturing_Cost(concept_number):
-    i = concept_number + 1 # offset by 1 for cell number in excel
-    W_structural = sheet.cell_value(3, i) #Structural Weight (40-50% of empty weight)
-    V_max = sheet.cell_value(2,i) # read excel (Max Level Airspeed)
-    
-    # Tooling Cost Factors (Finger et al. 2019)
-    F_cert = # LSA Certification
-    # N/A F_comp --> factor for 100% composites
-    # N/A F_CF --> factor for complex flap system 
-    F_press =  # factor for pressurized cabin
-    F_HyE =  # factor for hybrid-electric propulsion (may range from 1.33-1.66)
-
-    R_Tool =  # (Nicholai & Carichner) 
-    Cost_of_Manufacturing = 20.2588 * W_Airframe^0.74 * V_H^0.543 * Q^0.524 *
-    print('The Cost of Tooling for Concept {concept_number} is {Cost_of_Manufacturing}')
-    
+    F_Cert = 0.75
+    F_HyE = 1.10
+    F_Comp = 1.25 if concept_options.composites == "Yes" else 1
+    F_CF = 1.01 if concept_options.flaps == "Yes" else 1
+    R_MFG = 2.316 * y - 4552
+    Cost_of_Manufacturing = (20.2588 * W_Airframe**0.74 * V_H**0.543 * Q**0.524 * F_Cert * F_CF * 
+                             F_Comp * F_HyE * R_MFG * CPI)
+    print(f'The Cost of Manufacturing for Concept {concept_number} is {Cost_of_Manufacturing}')
+    return Cost_of_Manufacturing
 
 def Development_Support_Cost(concept_number):
-    i = concept_number + 1 # offset by 1 for cell number in excel
-    W_structural = sheet.cell_value(3, i) #Structural Weight (40-50% of empty weight)
-    V_max = sheet.cell_value(2,i) # read excel (Max Level Airspeed)
-    
-    # Tooling Cost Factors (Finger et al. 2019)
-    F_cert = # LSA Certification
-    # N/A F_comp --> factor for 100% composites
-    # N/A F_CF --> factor for complex flap system 
-    F_press =  # factor for pressurized cabin
-    F_HyE =  # factor for hybrid-electric propulsion (may range from 1.33-1.66)
-
-    R_Tool =  # (Nicholai & Carichner) 
+    F_Cert = 0.5
+    F_Comp = 1.5 if concept_options.composites == "Yes" else 1
+    F_CF = 1.01 if concept_options.flaps == "Yes" else 1
+    F_Press = 1.03
+    F_HyE = 1.05
+    Cost_of_Development_Support = (0.06458 * W_Airframe**0.873 * V_H**1.89 * Q_Proto**0.346 * 
+                                    F_Cert * F_CF * F_Comp * F_Press * F_HyE * CPI)
+    print(f'The Cost of Development Support for Concept {concept_number} is {Cost_of_Development_Support}')
+    return Cost_of_Development_Support
 
 def Flight_Test_Ops_Cost(concept_number):
-    i = concept_number + 1 # offset by 1 for cell number in excel
-    W_structural = sheet.cell_value(3, i) #Structural Weight (40-50% of empty weight)
-    V_max = sheet.cell_value(2,i) # read excel (Max Level Airspeed)
-    
-    # Tooling Cost Factors (Finger et al. 2019)
-    F_cert = # LSA Certification
-    # N/A F_comp --> factor for 100% composites
-    # N/A F_CF --> factor for complex flap system 
-    F_press =  # factor for pressurized cabin
-    F_HyE =  # factor for hybrid-electric propulsion (may range from 1.33-1.66)
+    F_Cert = 0.5
+    F_HyE = 1.50
+    Cost_of_Flight_Test_Ops = (0.009646 * W_Airframe**1.16 * V_H**1.3718 * Q_Proto**1.281 * 
+                               F_Cert * F_HyE * CPI)
+    print(f'The Cost of Flight Test Operations for Concept {concept_number} is {Cost_of_Flight_Test_Ops}')
+    return Cost_of_Flight_Test_Ops
 
-    R_Tool =  # (Nicholai & Carichner) 
+def Quality_Control_Cost(concept_number):
+    F_Cert = 0.5
+    F_Comp = 1.5 if concept_options.composites == "Yes" else 1
+    F_HyE = 1.5
+    C_MFG = Manufacturing_Cost(concept_number)
+    Cost_of_Quality_Control = 0.13 * C_MFG * F_Cert * F_Comp * F_HyE
+    print(f'The Cost of Quality Control for Concept {concept_number} is {Cost_of_Quality_Control}')
+    return Cost_of_Quality_Control
 
+def Cost_of_Materials(concept_number):
+    F_Cert = 0.75
+    F_CF = 1.02 if concept_options.flaps == "Yes" else 1
+    F_Press = 1.01
+    F_HyE = 1.05
+    Cost_of_Materials = (24.896 * W_Airframe**0.689 * V_H**0.624 * Q**0.792 * CPI * F_Cert * 
+                         F_CF * F_Press * F_HyE)
+    print(f'The Cost of Materials for Concept {concept_number} is {Cost_of_Materials}')
+    return Cost_of_Materials
 
-
-
-
-
-
-          
-
-
-
-
-
-
-
-
-
+def Cost_of_Development(concept_number):
+    Engineering = Engineering_Cost(concept_number)
+    Tooling = Tooling_Cost(concept_number)
+    Manufacturing = Manufacturing_Cost(concept_number)
+    Development_Support = Development_Support_Cost(concept_number)
+    Flight_Test_Ops = Flight_Test_Ops_Cost(concept_number)
+    Quality_Control = Quality_Control_Cost(concept_number)
+    Materials = Cost_of_Materials(concept_number)
+    Cost_of_Dev = (Engineering + Tooling + Manufacturing + Development_Support + 
+                            Flight_Test_Ops + Quality_Control + Materials)
+    print(f'The Cost of Development for Concept {concept_number} is {Cost_of_Dev}')
+    return Cost_of_Dev
