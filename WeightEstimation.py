@@ -11,7 +11,7 @@ B, A = np.polyfit(log_We, log_W0,1)
 
 def WeightEstimation():
     W_crew = 180
-    W_payload = 1
+    W_payload = 2000
     W_guess = 5000
     error = 10^(-6)
     tol = 2*error
