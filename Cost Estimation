@@ -1,16 +1,21 @@
+import numpy as np
+
 # import xlrd
 # Open Excel file
 # workbook = xlrd.open_workbook('path/to/your/excel_file.xls')
 # sheet = workbook.sheet_by_index(0)
 
 # Constant Variables
-CPI = 139  # Consumer Price Index (https://www.bls.gov/data/inflation_calculator.htm)
+CPI = 1.39  # Consumer Price Index (https://www.bls.gov/data/inflation_calculator.htm)
 Q = 275  # Number of aircraft produced over 5 years
 y = 2025  # Year of production
 W_Airframe = 19000 # (READ IN) Example airframe weight [lbs]
 V_H = 250 # Maximum level airspeed [knots/hr]
 Q_M = 4.5 # Number of aircraft produced in one month
 Q_Proto = 1 # Number of prototype aircraft to be produced
+m_MTO = # (READ IN) Max Takeoff Weight
+Tau_AC = ??
+t_flight = ??? # flight time in hours
 
 class ConceptOptions:
     taper = "No"
@@ -20,6 +25,8 @@ class ConceptOptions:
 concept_options = ConceptOptions()
 
 # Note All Cost Factors From Finger et al. 2019
+
+# Cost of Development
 
 def Engineering_Cost(concept_number):
     F_Cert = 0.67  # LSA Certification
@@ -44,17 +51,6 @@ def Tooling_Cost(concept_number):
                        F_CF * F_Comp * F_Press * F_HyE * R_Tool * CPI) #Finger et al. 2019
     print(f'The Cost of Tooling for Concept {concept_number} is {Cost_of_Tooling}')
     return Cost_of_Tooling
-
-def Manufacturing_Cost(concept_number):
-    F_Cert = 0.75
-    F_HyE = 1.10
-    F_Comp = 1.25 if concept_options.composites == "Yes" else 1
-    F_CF = 1.01 if concept_options.flaps == "Yes" else 1
-    R_MFG = 2.316 * y - 4552 # (Nicholai & Carichner) 
-    Cost_of_Manufacturing = (20.2588 * W_Airframe**0.74 * V_H**0.543 * Q**0.524 * F_Cert * F_CF * 
-                             F_Comp * F_HyE * R_MFG * CPI) #Finger et al. 2019
-    print(f'The Cost of Manufacturing for Concept {concept_number} is {Cost_of_Manufacturing}')
-    return Cost_of_Manufacturing
 
 def Development_Support_Cost(concept_number):
     F_Cert = 0.5
@@ -88,16 +84,17 @@ def Quality_Control_Cost(concept_number):
 def Cost_of_Development(concept_number):
     Engineering = Engineering_Cost(concept_number)
     Tooling = Tooling_Cost(concept_number)
-    Manufacturing = Manufacturing_Cost(concept_number)
     Development_Support = Development_Support_Cost(concept_number)
     Flight_Test_Ops = Flight_Test_Ops_Cost(concept_number)
     Quality_Control = Quality_Control_Cost(concept_number)
-    Cost_of_Dev = (Engineering + Tooling + Manufacturing + Development_Support + 
-                            Flight_Test_Ops + Quality_Control)
+    Cost_of_Dev = (Engineering + Tooling + Development_Support + 
+                            Flight_Test_Ops + Quality_Control) #Finger et al. 2019
     print(f'The Cost of Development for Concept {concept_number} is {Cost_of_Dev}')
     return Cost_of_Dev
 
 Cost_of_Development(1)
+
+# Flyaway Cost 
 
 def Cost_of_Materials(concept_number):
     F_Cert = 0.75
@@ -105,9 +102,43 @@ def Cost_of_Materials(concept_number):
     F_Press = 1.01
     F_HyE = 1.05
     Cost_of_Materials = (24.896 * W_Airframe**0.689 * V_H**0.624 * Q**0.792 * CPI * F_Cert * 
-                         F_CF * F_Press * F_HyE)
+                         F_CF * F_Press * F_HyE) #Finger et al. 2019
     print(f'The Cost of Materials for Concept {concept_number} is {Cost_of_Materials}')
     return Cost_of_Materials
 
+def Manufacturing_Cost(concept_number):
+    F_Cert = 0.75
+    F_HyE = 1.10
+    F_Comp = 1.25 if concept_options.composites == "Yes" else 1
+    F_CF = 1.01 if concept_options.flaps == "Yes" else 1
+    R_MFG = 2.316 * y - 4552 # (Nicholai & Carichner) 
+    Cost_of_Manufacturing = (20.2588 * W_Airframe**0.74 * V_H**0.543 * Q**0.524 * F_Cert * F_CF * 
+                             F_Comp * F_HyE * R_MFG * CPI) #Finger et al. 2019
+    print(f'The Cost of Manufacturing for Concept {concept_number} is {Cost_of_Manufacturing}')
+    return Cost_of_Manufacturing
 
+#Fixed Costs
+Cost_Fixed_landing = -7500 #Subract $7,500 for fixed landing gear (Finger et al. 2019)
+Cost_Pt_23 = 15000 #Part 23 aircraft
+Cost_Miscelaneous =  Cost_Fixed_landing + Cost_Pt_23
 
+# Flyaway Factors
+F_EXP = 0.95
+F_QDF = F_EXP ** (1.4427 * np.log(Q)) #Quantity Discount Factor (Finger et al. 2019)
+F_Insurance = 1.15 # Cost of Insurance is 15-20% of the total cost to produce for hyrbrid (Finger et al. 2019)
+F_profit = 1.10 # 10% Profit (Finger et al. 2019)
+
+def Cost_of_Engine(concept_number):
+    ADD
+    return Cost_of_Engine
+
+def Cost_of_Flyaway(concept_number):
+    Materials = Cost_of_Materials(concept_number)
+    Manufacturing = Manufacturing_Cost(concept_number)
+    Engine = Cost_of_Engine(concept_number)
+    Misc = Cost_Miscelaneous
+    Flyaway_Cost = (Materials + Engine + Misc + Manufacturing) * F_QDF * F_Insurance * F_profit
+    print(f'The Flyaway Cost for Concept {concept_number} is {Flyaway_Cost}') 
+    return Flyaway_Cost
+
+# Direct Operating Cost
