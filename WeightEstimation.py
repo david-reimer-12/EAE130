@@ -11,10 +11,10 @@ B, A = np.polyfit(log_We, log_W0,1)
 def WeightEstimation():
     W_crew = 180 #lbs
     W_payload = 2000 #lbs
-    Range = 3220000 #ft
+    Range = 3.706*10**(6) #ft
     Endurance = 28800 #seconds
     V_inf = 337.562 #ft/s
-    SFC = 0.25*32 #(lbm/hr)/lbf
+    SFC = 7.06*10**(-9) #0.0000003 #(lbm/hr)/lbf
     prop_eff = 0.8
     LD_ratio = 12
     W_guess = 5000
@@ -24,12 +24,12 @@ def WeightEstimation():
     tol = 10**(-6)
     error = 2*tol
     W0 = W_guess
+
     while tol < error:
-        empty_weight_frac = 10**(-A/B) * W0**(1/B-1)
-        W0_new = (W_crew + W_payload)/(1-fuel_weight_ratio-empty_weight_frac)
+        empty_weight_frac = 10**(-A/B) * W0 **(1/B-1)
+        W0_new = (W_crew + W_payload)/(1-fuel_weight_ratio-empty_weight_frac) + 400
         error = abs((W0_new - W0)/W0_new)
         W0 = W0_new
         print(W0)
-
 
 WeightEstimation()
