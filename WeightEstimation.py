@@ -14,7 +14,7 @@ def WeightEstimation():
     Range = 3.706*10**(6) #ft
     Endurance = 28800 #seconds
     V_inf = 337.562 #ft/s
-    SFC = 7.06*10**(-9) #0.0000003 #(lbm/hr)/lbf
+    SFC = 7.06*10**(-9) #1/ft
     prop_eff = 0.8
     LD_ratio = 12
     W_guess = 5000
