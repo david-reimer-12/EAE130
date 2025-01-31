@@ -10,6 +10,14 @@ def AgRegressionData():
     log_We = np.log10(We)
     B, A = np.polyfit(log_We, log_W0,1)
 
+def TwinRegressionData():
+    global A, B
+    W0 = [3900, 5100, 6775, 9630, 5150, 5990,6850,6750,7450,8200,6500,7000,5500,3800,3800,8700,3050,2183,9480,10325,7350,2900]
+    We = [2466,3236,4423,5765,3305,3948,4077,4368,4668,4915,4003,4221,3737,2354,2430,4910,2100,1322,5732,6629,4100,1610]
+    log_W0 = np.log10(W0)
+    log_We = np.log10(We)
+    B, A = np.polyfit(log_We, log_W0,1)
+
 def WeightEstimation():
     W_crew = 180 #lbs
     W_payload = 2000 #lbs
@@ -18,7 +26,7 @@ def WeightEstimation():
     V_inf = 337.562 #ft/s
     SFC = 7.06*10**(-9) #1/ft
     prop_eff = 0.8
-    LD_ratio = 12
+    LD_ratio = 11.8
     W_guess = 5000
     cruise = math.exp(-(Range*SFC)/(prop_eff*LD_ratio))
     loiter = math.exp((-Endurance*V_inf*SFC)/(prop_eff*LD_ratio))
@@ -34,5 +42,9 @@ def WeightEstimation():
         W0 = W0_new
         print(W0)
 
+TwinRegressionData()
+WeightEstimation()
+print(" ")
 AgRegressionData()
 WeightEstimation()
+
