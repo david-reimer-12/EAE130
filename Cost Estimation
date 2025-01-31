@@ -9,13 +9,10 @@ import numpy as np
 CPI = 1.39  # Consumer Price Index (https://www.bls.gov/data/inflation_calculator.htm)
 Q = 275  # Number of aircraft produced over 5 years
 y = 2025  # Year of production
-W_Airframe = 19000 # (READ IN) Example airframe weight [lbs]
+W_Airframe = 19000 * 0.4 # (READ IN) Example airframe weight [lbs] - 40% of empty weight
 V_H = 250 # Maximum level airspeed [knots/hr]
 Q_M = 4.5 # Number of aircraft produced in one month
 Q_Proto = 1 # Number of prototype aircraft to be produced
-m_MTO = # (READ IN) Max Takeoff Weight
-Tau_AC = ??
-t_flight = ??? # flight time in hours
 
 class ConceptOptions:
     taper = "No"
@@ -29,13 +26,12 @@ concept_options = ConceptOptions()
 # Cost of Development
 
 def Engineering_Cost(concept_number):
-    F_Cert = 0.67  # LSA Certification
     F_Comp = 2 if concept_options.composites == "Yes" else 1
     F_CF = 1.03 if concept_options.flaps == "Yes" else 1
     F_Press = 1.03
     F_HyE = 1.33
     R_ENG = 2.576 * y - 5058  # Hourly rate of engineers (Nicholai & Carichner) 
-    Cost_of_Engineering = (0.083 * W_Airframe**0.791 * V_H**1.521 * Q**0.183 * F_Cert * F_CF * F_Comp * 
+    Cost_of_Engineering = (0.083 * W_Airframe**0.791 * V_H**1.521 * Q**0.183 * F_CF * F_Comp * 
                            F_Press * F_HyE * R_ENG * CPI) #Finger et al. 2019
     print(f'The Cost of Engineering for Concept {concept_number} is {Cost_of_Engineering}')
     return Cost_of_Engineering
@@ -46,76 +42,67 @@ def Tooling_Cost(concept_number):
     F_Taper = 0.95 if concept_options.taper == "Yes" else 1
     F_Press = 1.01
     F_HyE = 1.10
-    R_Tool = 2.883 * y - 5058 # (Nicholai & Carichner) 
+    R_Tool = 2.883 * y - 5666 # (Nicholai & Carichner) 
     Cost_of_Tooling = (2.1036 * W_Airframe**0.764 * V_H**0.899 * Q**0.178 * Q_M**0.066 * F_Taper * 
                        F_CF * F_Comp * F_Press * F_HyE * R_Tool * CPI) #Finger et al. 2019
     print(f'The Cost of Tooling for Concept {concept_number} is {Cost_of_Tooling}')
     return Cost_of_Tooling
 
 def Development_Support_Cost(concept_number):
-    F_Cert = 0.5
     F_Comp = 1.5 if concept_options.composites == "Yes" else 1
     F_CF = 1.01 if concept_options.flaps == "Yes" else 1
     F_Press = 1.03
     F_HyE = 1.05
-    Cost_of_Development_Support = (0.06458 * W_Airframe**0.873 * V_H**1.89 * Q_Proto**0.346 * 
-                                    F_Cert * F_CF * F_Comp * F_Press * F_HyE * CPI) #Finger et al. 2019
+    Cost_of_Development_Support = (0.06458 * W_Airframe**0.873 * V_H**1.89 * Q_Proto**0.346
+                                    * F_CF * F_Comp * F_Press * F_HyE * CPI) #Finger et al. 2019
     print(f'The Cost of Development Support for Concept {concept_number} is {Cost_of_Development_Support}')
     return Cost_of_Development_Support
 
 def Flight_Test_Ops_Cost(concept_number):
-    F_Cert = 0.5
     F_HyE = 1.50
     Cost_of_Flight_Test_Ops = (0.009646 * W_Airframe**1.16 * V_H**1.3718 * Q_Proto**1.281 * 
-                               F_Cert * F_HyE * CPI) #Finger et al. 2019
+                             F_HyE * CPI) #Finger et al. 2019
     print(f'The Cost of Flight Test Operations for Concept {concept_number} is {Cost_of_Flight_Test_Ops}')
     return Cost_of_Flight_Test_Ops
-
-def Quality_Control_Cost(concept_number):
-    F_Cert = 0.5
-    F_Comp = 1.5 if concept_options.composites == "Yes" else 1
-    F_HyE = 1.5
-    C_MFG = Manufacturing_Cost(concept_number)
-    Cost_of_Quality_Control = 0.13 * C_MFG * F_Cert * F_Comp * F_HyE #Finger et al. 2019
-    print(f'The Cost of Quality Control for Concept {concept_number} is {Cost_of_Quality_Control}')
-    return Cost_of_Quality_Control
-
 
 def Cost_of_Development(concept_number):
     Engineering = Engineering_Cost(concept_number)
     Tooling = Tooling_Cost(concept_number)
     Development_Support = Development_Support_Cost(concept_number)
     Flight_Test_Ops = Flight_Test_Ops_Cost(concept_number)
-    Quality_Control = Quality_Control_Cost(concept_number)
     Cost_of_Dev = (Engineering + Tooling + Development_Support + 
-                            Flight_Test_Ops + Quality_Control) #Finger et al. 2019
+                            Flight_Test_Ops) #Finger et al. 2019
     print(f'The Cost of Development for Concept {concept_number} is {Cost_of_Dev}')
     return Cost_of_Dev
-
-Cost_of_Development(1)
 
 # Flyaway Cost 
 
 def Cost_of_Materials(concept_number):
-    F_Cert = 0.75
     F_CF = 1.02 if concept_options.flaps == "Yes" else 1
     F_Press = 1.01
     F_HyE = 1.05
-    Cost_of_Materials = (24.896 * W_Airframe**0.689 * V_H**0.624 * Q**0.792 * CPI * F_Cert * 
-                         F_CF * F_Press * F_HyE) #Finger et al. 2019
+    Cost_of_Materials = (24.896 * W_Airframe**0.689 * V_H**0.624 * Q**0.792 * CPI * 
+                         F_CF * F_Press * F_HyE) / Q #Finger et al. 2019
     print(f'The Cost of Materials for Concept {concept_number} is {Cost_of_Materials}')
     return Cost_of_Materials
 
 def Manufacturing_Cost(concept_number):
-    F_Cert = 0.75
     F_HyE = 1.10
     F_Comp = 1.25 if concept_options.composites == "Yes" else 1
     F_CF = 1.01 if concept_options.flaps == "Yes" else 1
     R_MFG = 2.316 * y - 4552 # (Nicholai & Carichner) 
-    Cost_of_Manufacturing = (20.2588 * W_Airframe**0.74 * V_H**0.543 * Q**0.524 * F_Cert * F_CF * 
-                             F_Comp * F_HyE * R_MFG * CPI) #Finger et al. 2019
+    Cost_of_Manufacturing = (20.2588 * W_Airframe**0.74 * V_H**0.543 * Q**0.524 * F_CF * 
+                             F_Comp * F_HyE * R_MFG * CPI) / Q #Finger et al. 2019
     print(f'The Cost of Manufacturing for Concept {concept_number} is {Cost_of_Manufacturing}')
     return Cost_of_Manufacturing
+
+def Quality_Control_Cost(concept_number):
+    F_Comp = 1.5 if concept_options.composites == "Yes" else 1
+    F_HyE = 1.5
+    C_MFG = Manufacturing_Cost(concept_number)
+    Cost_of_Quality_Control = 0.13 * C_MFG * F_Comp * F_HyE #Finger et al. 2019
+    print(f'The Cost of Quality Control for Concept {concept_number} is {Cost_of_Quality_Control}')
+    return Cost_of_Quality_Control
 
 #Fixed Costs
 Cost_Fixed_landing = -7500 #Subract $7,500 for fixed landing gear (Finger et al. 2019)
@@ -128,17 +115,150 @@ F_QDF = F_EXP ** (1.4427 * np.log(Q)) #Quantity Discount Factor (Finger et al. 2
 F_Insurance = 1.15 # Cost of Insurance is 15-20% of the total cost to produce for hyrbrid (Finger et al. 2019)
 F_profit = 1.10 # 10% Profit (Finger et al. 2019)
 
+#Engine Costs
+def Electric_Motor_Cost(concept_number):
+    if concept_number == 1:  #Number of motors
+        N_motor = 2
+    else:
+        N_motor = 1
+    P_EM = 76 #[hp]
+    Cost_of_Electric_Motor = 174 * N_motor * P_EM * CPI   #Finger et al. 2019
+    print(f'The Cost of the Electric Motor for Concept {concept_number} is ${Cost_of_Electric_Motor}')
+    return Cost_of_Electric_Motor
+
+def Power_Management_Cost(concept_number):
+    P_EM = 76 #[hp]
+    Cost_of_Power_Management_System = 150 * P_EM * CPI  #Finger at al. 2019
+    print(f'The Cost of the Power Management System for Concept {concept_number} is ${Cost_of_Power_Management_System}')
+    return Cost_of_Power_Management_System
+
+def Battery_Cost(concept_number):
+    E_bat = 18 #[kWh]
+    Cost_of_Battery = 150 * E_bat * CPI  #Finger at al. 2019
+    print(f'The Cost of the Battery for Concept {concept_number} is ${Cost_of_Battery}')
+    return Cost_of_Battery
+
+def Propeller_Cost(concept_number):
+    if concept_number == 1:  #Number of propellers
+        N_prop = 2
+    else:
+        N_prop = 1
+    if concept_number == 1:  #prop diamter [ft]
+        D_P = 6
+    if concept_number ==1:
+        D_P = 7
+    else:
+        D_P = 8
+    P_SHP = 221
+    Cost_of_Propeller = 210 * N_prop * CPI * (D_P)**2 * (P_SHP / D_P)**0.12   #Finger at al. 2019
+    print(f'The Cost of the Propeller(s) for concept {concept_number} is ${Cost_of_Propeller}')
+    return Cost_of_Propeller
+
 def Cost_of_Engine(concept_number):
-    ADD
+    Electric = Electric_Motor_Cost(concept_number)
+    Power = Power_Management_Cost(concept_number)
+    Battery = Battery_Cost(concept_number)
+    Propeller = Propeller_Cost(concept_number)
+    Cost_of_Engine = Electric + Power + Battery + Propeller 
+    print(f'The Cost of the Engine for concept {concept_number} is ${Cost_of_Engine}')
     return Cost_of_Engine
 
 def Cost_of_Flyaway(concept_number):
     Materials = Cost_of_Materials(concept_number)
     Manufacturing = Manufacturing_Cost(concept_number)
     Engine = Cost_of_Engine(concept_number)
+    Quality_Control = Quality_Control_Cost(concept_number)
     Misc = Cost_Miscelaneous
-    Flyaway_Cost = (Materials + Engine + Misc + Manufacturing) * F_QDF * F_Insurance * F_profit
+    Flyaway_Cost = ((Materials + Engine + Misc + Manufacturing + Quality_Control) * F_QDF * F_Insurance * F_profit)
     print(f'The Flyaway Cost for Concept {concept_number} is {Flyaway_Cost}') 
     return Flyaway_Cost
 
 # Direct Operating Cost
+def Fuel_Cost(concept_number):
+    W_fuel = 192 #[kg]
+    P_fuel = 6.93 #[$/gal]
+    rho_fuel = 2.72928 #[kg/gal]
+    Cost_of_Fuel = 1.02 * W_fuel * (P_fuel / rho_fuel)   #Metabook
+    print(f'The Cost of Fuel for Concept {concept_number} is ${Cost_of_Fuel}')
+    return Cost_of_Fuel
+
+def Oil_Cost(concept_number):
+    W_oil = 192 #[kg]
+    P_oil = 6.93 #[$/gal]
+    rho_oil = 3.3728 #[kg/gal]
+    Cost_of_Oil = 1.02 * W_oil * (P_oil / rho_oil)   #Metabook
+    print(f'The Cost of Oil for Concept {concept_number} is ${Cost_of_Oil}')
+    return Cost_of_Oil
+
+def Electricity_Cost(concept_number):
+    W_battery = 93 #[kg]
+    P_electricity = 0.1654 #[$/kWh]
+    Battery_Specific_Energy = 1.9 #[kWh/kg] 
+    Cost_of_Electricity = 1.05 * W_battery * P_electricity * Battery_Specific_Energy
+    print(f'The Cost of Electricity {concept_number} is ${Cost_of_Electricity}')
+    return Cost_of_Electricity
+
+def Annual_Utilization(concept_number):
+    t_b = 2.0 # Updated typical operational block time in hours for a turboprop # Some operational time factor
+    U_annual = 1.5 * 10**3 * (3.4546 * t_b + 2.994 - (12.289 * t_b**2 - 5.6626 * t_b + 8.964) ** 0.5)
+    print(f'Annual Utilization is {U_annual}')
+    return U_annual
+
+def Depreciation_Cost(concept_number):
+    C_unit = 2205000 # Unit cost of aircraft
+    K_depreciation = concept_number # Depreciation factor
+    t_b = concept_number # Operational time factor
+    n = concept_number # Number of years or cycles
+    U_annual = Annual_Utilization(concept_number)
+    C_depreciation = (C_unit * (1 - K_depreciation * t_b)) / (n * U_annual)
+    print(f'The Cost of Depreciation for Concept {concept_number} is {C_depreciation}')
+    return C_depreciation
+
+def Registration_Cost(concept_number):
+    MTOW = 16000 # Maximum takeoff weight for a commonly used turboprop # Maximum takeoff weight
+    DOC = 1256 # Direct operating cost
+    C_registration = (0.001 + 10**-8 * MTOW) * DOC
+    print(f'The Cost of Registration for Concept {concept_number} is {C_registration}')
+    return C_registration
+
+
+def Financing_Cost(concept_number):
+    DOC = 1256 # Direct operating cost
+    C_finance = 0.07 * DOC
+    print(f'The Cost of Financing for Concept {concept_number} is {C_finance}')
+    return C_finance
+
+
+def Navigation_Fees(concept_number):
+    CEF = 1.03 # Cost escalation factor (~3% per year, typically used in aviation-related financial models)
+    R = concept_number # Mission range
+    t_b = concept_number # Operational time factor
+    MTOW = 16000 # Maximum takeoff weight for a commonly used turboprop # Maximum takeoff weight
+    C_navigation = 0.5 * CEF * (1.852 * R / t_b) * ((0.00045359237 * MTOW) / 50) ** 0.5
+    print(f'The Cost of Navigation Fees for Concept {concept_number} is {C_navigation}')
+    return C_navigation
+
+
+def Airport_Fees(concept_number):
+    MTOW = 16000 # Maximum takeoff weight for a commonly used turboprop # Maximum takeoff weight
+    CEF = 1.03 # Cost escalation factor (~3% per year, typically used in aviation-related financial models)
+    C_airport = 1.5 * (MTOW / 1000) * CEF
+    print(f'The Cost of Airport Fees for Concept {concept_number} is {C_airport}')
+    return C_airport
+
+def Direct_Op_Cost(concept_number):
+    Fuel = Fuel_Cost(concept_number)
+    Oil = Oil_Cost(concept_number)
+    Electric = Electricity_Cost(concept_number)
+    Deprecitation = Depreciation_Cost(concept_number)
+    Registration = Registration_Cost(concept_number)
+    Financing = Financing_Cost(concept_number)
+    Nav = Navigation_Fees(concept_number)
+    Airport = Airport_Fees(concept_number)
+    DOP_Cost = (Fuel  + Oil + Electric + Deprecitation + Registration + Financing + Nav + Airport)
+    print(f'The Direct Operating Cost of {concept_number} is {DOP_Cost}')
+    return DOP_Cost
+
+Cost_of_Development(1)
+Cost_of_Flyaway(1)
+Direct_Op_Cost(1)
