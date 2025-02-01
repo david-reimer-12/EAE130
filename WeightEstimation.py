@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import math 
-## Regression Data
+## Regression Data Ag Aircraft
 def AgRegressionData():
     global A, B
     W0 = [3417,2866,6614,9259,4244,10000,7020,3500,3300,3900,6173,6100,10000,6000,6000,6000,12675]
@@ -10,6 +10,7 @@ def AgRegressionData():
     log_We = np.log10(We)
     B, A = np.polyfit(log_We, log_W0,1)
 
+## Regression Data Twin Engine Aircraft
 def TwinRegressionData():
     global A, B
     W0 = [3900, 5100, 6775, 9630, 5150, 5990,6850,6750,7450,8200,6500,7000,5500,3800,3800,8700,3050,2183,9480,10325,7350,2900]
@@ -23,7 +24,7 @@ def WeightEstimation():
     W_payload = 2000 #lbs
     Range = 3.706*10**(6) #ft
     Endurance = 28800 #seconds
-    V_inf = 337.562 #ft/s
+    V_inf = 290.303 #ft/s
     SFC = 7.06*10**(-9) #1/ft
     prop_eff = 0.8
     LD_ratio = 11.8
@@ -37,7 +38,7 @@ def WeightEstimation():
 
     while tol < error:
         empty_weight_frac = 10**(-A/B) * W0 **(1/B-1)
-        W0_new = (W_crew + W_payload)/(1-fuel_weight_ratio-empty_weight_frac) + 400
+        W0_new = (W_crew + W_payload)/(1-1.06*fuel_weight_ratio-empty_weight_frac) + 400
         error = abs((W0_new - W0)/W0_new)
         W0 = W0_new
 
@@ -55,4 +56,3 @@ WeightEstimation()
 print(" ")
 AgRegressionData()
 WeightEstimation()
-
