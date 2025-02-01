@@ -7,9 +7,9 @@ y = 2025  # Year of production
 
 def Empty_Weight(concept_number):
     if concept_number == 1:
-        empty_weight = 4081
+        empty_weight = 4088
     else:
-        empty_weight = 3309
+        empty_weight = 3313
     return empty_weight
 
 concept_number = 1 # 2 or 3
