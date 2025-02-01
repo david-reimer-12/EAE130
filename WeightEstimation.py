@@ -40,7 +40,15 @@ def WeightEstimation():
         W0_new = (W_crew + W_payload)/(1-fuel_weight_ratio-empty_weight_frac) + 400
         error = abs((W0_new - W0)/W0_new)
         W0 = W0_new
-        print(W0)
+
+        if tol > error:
+            We = empty_weight_frac*W0
+            print("TOGW")
+            print(W0)
+            print("Empty Weight:")
+            print(We)
+
+    
 
 TwinRegressionData()
 WeightEstimation()
