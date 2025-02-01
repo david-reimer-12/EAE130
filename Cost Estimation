@@ -1,21 +1,30 @@
 import numpy as np
 
-# import xlrd
-# Open Excel file
-# workbook = xlrd.open_workbook('path/to/your/excel_file.xls')
-# sheet = workbook.sheet_by_index(0)
-
 # Constant Variables
 CPI = 1.39  # Consumer Price Index (https://www.bls.gov/data/inflation_calculator.htm)
 Q = 275  # Number of aircraft produced over 5 years
 y = 2025  # Year of production
-W_Airframe = 19000 * 0.4 # (READ IN) Example airframe weight [lbs] - 40% of empty weight
+
+def Empty_Weight(concept_number):
+    if concept_number == 1:
+        empty_weight = 4081
+    else:
+        empty_weight = 3309
+    return empty_weight
+
+concept_number = 1 # 2 or 3
+empty_weight = Empty_Weight(concept_number)
+W_Airframe = empty_weight * 0.4  # Airframe weight is 40% of empty weight
+
+print(f"Empty Weight: {empty_weight} lbs")
+print(f"Airframe Weight: {W_Airframe} lbs")
+
 V_H = 250 # Maximum level airspeed [knots/hr]
 Q_M = 4.5 # Number of aircraft produced in one month
 Q_Proto = 1 # Number of prototype aircraft to be produced
 
 class ConceptOptions:
-    taper = "No"
+    taper = "No" # no means the wing is tapered, yes means wing is untapered
     composites = "No"
     flaps = "Yes"
 
@@ -259,6 +268,6 @@ def Direct_Op_Cost(concept_number):
     print(f'The Direct Operating Cost of {concept_number} is {DOP_Cost}')
     return DOP_Cost
 
-Cost_of_Development(1)
-Cost_of_Flyaway(1)
-Direct_Op_Cost(1)
+Cost_of_Development(concept_number)
+Cost_of_Flyaway(concept_number)
+Direct_Op_Cost(concept_number)
