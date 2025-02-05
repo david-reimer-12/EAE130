@@ -1,1 +1,28 @@
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+import pandas as pd
 
+#Data from the OpenVSP file:
+b = 47              #[ft]
+chord = 6.27219     #[ft]
+S_ref = 294.79293      #[ft^2]
+AR = 7.45293
+
+def ZeroLiftDrag():
+    c = 1.0447      #Ag aircraft constant (Roskam)
+    d = 0.5326      #Ag aircraft constant (Roskam)
+    W_TO = 5812     #Take off weight [lbs]
+    S_wet = (10**c) * (W_TO**d)     #Wetted surface area [ft^2]
+
+    C_f = 0.0055    #Estimated skin friction coefficient (Raymer)
+    a = -2.2218     #Constant based on C_f (Roskam)
+    b = 1.00        #Constant based on C_f (Roskam)
+
+    f = 10**(a + b*(np.log10(S_wet)))       #logarithmic equation for equivalent parasite area (Roskam)
+
+    C_d_0 = f / S_ref
+    return C_d_0
+
+C_d_0 = ZeroLiftDrag()
+print("Zero-Lift Drag Coefficient (C_d_0):", C_d_0)
