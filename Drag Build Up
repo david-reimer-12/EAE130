@@ -26,3 +26,39 @@ def ZeroLiftDrag():
 
 C_d_0 = ZeroLiftDrag()
 print("Zero-Lift Drag Coefficient (C_d_0):", C_d_0)
+
+
+
+def Configuration_Values(configuration):
+    drag_LG = 0.015
+    drag_Flaps_TO = 0.01
+    drag_Flaps_L = 0.060
+    e_clean = 0.825
+    e_LG = e_clean
+    e_Flaps_TO = 0.775
+    e_Flaps_L = 0.725
+
+    if configuration == 1:
+        del_C_d_0 = drag_LG
+        e = e_LG
+    elif configuration == 2:
+        del_C_d_0 = drag_LG + drag_Flaps_TO
+        e = e_Flaps_TO
+    elif configuration == 3:
+        del_C_d_0 = drag_LG + drag_Flaps_L
+        e = e_Flaps_L
+    else:
+        return "Configuration input is not possible"
+    return del_C_d_0, e
+
+
+configuration = 1  # User input
+
+del_C_d_0, e = Configuration_Values(configuration)
+print("Zero-lift drag coefficient adjustment", del_C_d_0)
+print("Oswald efficiency factor:", e)
+
+#Create an array of values for C_L:
+C_L = np.linspace(-2,2,100)
+
+def total_drag_coefficient():
