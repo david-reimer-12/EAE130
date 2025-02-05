@@ -21,7 +21,12 @@ def ZeroLiftDrag():
 
     f = 10**(a + b*(np.log10(S_wet)))       #logarithmic equation for equivalent parasite area (Roskam)
 
-    C_d_0 = f / S_ref
+    #Here we will add in additional zero lift drag paramater like canapy and control surface gaps:
+    C_d_0_CS = 0.0005       #Additional drag coefficient value for control surface gaps
+    C_d_0_C = 0.0004        #Additional drag coefficient value for Canopy design
+    C_d_0_A = 0.0008        #Additional drag coefficient value for GPS antenna
+
+    C_d_0 = (f / S_ref) + C_d_0_CS + C_d_0_C + C_d_0_A
     return C_d_0
 
 C_d_0 = ZeroLiftDrag()
@@ -51,14 +56,26 @@ def Configuration_Values(configuration):
         return "Configuration input is not possible"
     return del_C_d_0, e
 
-
-configuration = 1  # User input
-
-del_C_d_0, e = Configuration_Values(configuration)
-print("Zero-lift drag coefficient adjustment", del_C_d_0)
-print("Oswald efficiency factor:", e)
-
 #Create an array of values for C_L:
 C_L = np.linspace(-2,2,100)
 
-def total_drag_coefficient():
+del_C_d_0_1, e_1 = Configuration_Values(1)
+del_C_d_0_2, e_2 = Configuration_Values(2)
+del_C_d_0_3, e_3 = Configuration_Values(3)
+
+C_D_1 = (C_d_0 + del_C_d_0_1) + ((C_L**2) / (np.pi * e_1 * AR))
+C_D_2 = (C_d_0 + del_C_d_0_2) + ((C_L**2) / (np.pi * e_2 * AR))
+C_D_3 = (C_d_0 + del_C_d_0_3) + ((C_L**2) / (np.pi * e_3 * AR))
+
+
+plt.figure(figsize=(10,6))
+plt.title('Drag Polars for 3 Aircraft Configurations')
+plt.xlabel("$C_D$")      
+plt.ylabel("$C_L$")
+line = 3      #creates a larger linewidth
+plt.plot(C_D_1, C_L, color='blue', linewidth=line, label='Configuration #1: Static LG')
+plt.plot(C_D_2, C_L, color='red', linewidth=line, label='Configuration #2: Static LG, Takeoff Flaps')
+plt.plot(C_D_3, C_L, color='green', linewidth=line, label='Configuration #3: Static LG, Landing Flaps')
+plt.legend(loc='best', fontsize='10', framealpha=1)
+#plt.axis('equal')          #Forces equal scales
+plt.show()
