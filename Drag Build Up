@@ -93,11 +93,13 @@ V = 290.3     #ft/s
 q = (0.5) * rho * V ** 2
 W_L = W_TO
 e = e_1
-n = 0.8
-n_p = n
+n =  ?       #Load Factor
+n_p = 0.8
 G = 0.083
 W_cruise = W_TO
 W = W_TO
+
+P_ratio = 1.33
 
 # Solving for TOP23
 a = 0.0149
@@ -110,16 +112,27 @@ TOP_23 = max(roots)
 #Different Eqns
 W_over_S_Stall = 1 / 2 * rho * (V_stall**2) * C_L_max
 
-W_over_S_takeoff_length = TOP_23 * (P/W) * (rho/rho_SL) * C_L_max
+#W_over_S_takeoff_length = TOP_23 * (P/W) * (rho/rho_SL) * C_L_max
 
-s_TO = 8.134*TOP_23 + 0.0149*TOP_23**2
+#s_TO = 8.134*TOP_23 + 0.0149*TOP_23**2
 
-W_over_S_Landing = (W_L / S_ref) / (W_L / W_TO)
+#W_over_S_Landing = (W_L / S_ref) / (W_L / W_TO)
 
-P_over_W_TO = (N_engine / (N_engine - 1)) * (W / W_takeoff) ^(3/2) * (P/W)
+#P_over_W_TO = (N_engine / (N_engine - 1)) * (W / W_takeoff) ^(3/2) * (P/W)
 
-P_over_W_crz= (( q * V *  (C_D_0 + W_over_S **2 * (W_cruise/W_takeoff) ** 2)) / (550 * n_p * W_over_S_crz)) * (P_takeoff / P_cruise)
+#P_over_W_crz= (( q * V *  (C_D_0 + W_over_S **2 * (W_cruise/W_takeoff) ** 2)) / (550 * n_p * W_over_S_crz)) * (P_ratio)
 
-T_over_W_ceiling = 2 * np.sqrt((C_D_0)/(np.pi * AR * e)) + G
+#T_over_W_ceiling = 2 * np.sqrt((C_D_0)/(np.pi * AR * e)) + G
 
-T_over_W_maneuver = ((q) * C_D_0 / W_over_S) + (W_over_S) * (n**2 / q * np.pi * AR * e)
+#T_over_W_maneuver = ((q) * C_D_0 / W_over_S) + (W_over_S) * (n**2 / q * np.pi * AR * e)
+
+
+plt.figure(figsize=(10,6))
+plt.title('Constraint Diagram')
+plt.xlabel("Wing Loading (W/S)")      
+plt.ylabel("Power Loading (W/P)")
+line = 1      #creates a larger linewidth
+plt.axvline(x=W_over_S_Stall, color='r', linestyle='-', label='Stall')  # Vertical line
+#plt.plot(C_D_1, C_L, color='blue', linewidth=line, label='Stall')
+plt.legend(loc='best', fontsize='10', framealpha=1)
+plt.show()
