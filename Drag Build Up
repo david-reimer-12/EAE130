@@ -191,7 +191,7 @@ plt.plot(W_over_S, W_over_P_maneuver, color='lime', linewidth=line, label='Manue
 plt.fill_between(W_over_S, W_over_P_TOclimb, where=((W_over_P_TOclimb < W_over_P_crz) & (W_over_S_Stall > W_over_S )), color='#00FFFF')
 plt.fill_between(W_over_S, W_over_P_crz, where=((W_over_P_crz < W_over_P_BALKclimb) & (8 >= W_over_S )), color='#00FFFF', label = 'Feasibility Region')
 
-plt.scatter(W_over_S_Stall, 1.943, color='red', zorder=5, label='Intersection')
+plt.scatter(W_over_S_Stall, 1.943, color='red', zorder=5, label='Design Point')
 
 plt.legend(loc='best', fontsize='10', framealpha=1)
 plt.axhline(y=0, color='black', linestyle='-', linewidth=1)  
