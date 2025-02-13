@@ -94,7 +94,7 @@ V = 290.3     #ft/s
 q = (0.5) * rho * V ** 2
 W_L =  W_TO#[lbf]
 e = e_1
-n =  3       #Load Factor
+n =  2.866       #Load Factor
 n_p = 0.8
 G_TO = 0.083
 G_ER = 0.04
@@ -169,9 +169,9 @@ P_over_W_Cieling_abs = T_over_W_Cieling_abs / ((550*n_p)/np.sqrt((2/(rho*C_L_max
 W_over_P_Cieling_abs = P_over_W_Cieling_abs**(-1)
 
 #Maneuver Constraint: **STILL NEED TO COMPUTE THE LOAD FACTOR AND MANEUVER STALL SPEED**
-#T_over_W_maneuver = ((q_crz*C_D_0)/(W_over_S)) + (k*(n**2 / q)*(W_over_S))
-#P_over_w_maneuver = T_over_W_maneuver / ((550*n_p)/np.sqrt((2/(rho*C_L_max))*(W_over_S)))
-#W_over_P_maneuver = P_over_w_maneuver**(-1)
+T_over_W_maneuver = ((q_crz*C_D_0)/(W_over_S)) + (k*(n**2 / q)*(W_over_S))
+P_over_w_maneuver = T_over_W_maneuver / ((550*n_p)/np.sqrt((2/(rho*C_L_max))*(W_over_S)))
+W_over_P_maneuver = P_over_w_maneuver**(-1)
 
 plt.figure(figsize=(10,6))
 plt.title('Constraint Diagram')
@@ -186,7 +186,12 @@ plt.plot(W_over_S, W_over_P_ERclimb, color='pink', linewidth=line, label='EnRout
 plt.plot(W_over_S, W_over_P_BALKclimb, color='brown', linewidth=line, label='Balked Climb')
 plt.plot(W_over_S, W_over_P_crz, color='orange', linewidth=line, label='Cruise')
 plt.plot(W_over_S, W_over_P_Cieling_abs, color='olive', linewidth=line, label='Absolute Ceiling')
-#plt.plot(W_over_S, W_over_P_maneuver, color='lime', linewidth=line, label='Manuever')
+plt.plot(W_over_S, W_over_P_maneuver, color='lime', linewidth=line, label='Manuever')
+
+plt.fill_between(W_over_S, W_over_P_TOclimb, where=((W_over_P_TOclimb < W_over_P_crz) & (W_over_S_Stall > W_over_S )), color='#00FFFF')
+plt.fill_between(W_over_S, W_over_P_crz, where=((W_over_P_crz < W_over_P_BALKclimb) & (8 >= W_over_S )), color='#00FFFF', label = 'Feasibility Region')
+
+plt.scatter(W_over_S_Stall, 1.943, color='red', zorder=5, label='Intersection')
 
 plt.legend(loc='best', fontsize='10', framealpha=1)
 plt.axhline(y=0, color='black', linestyle='-', linewidth=1)  
