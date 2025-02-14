@@ -94,7 +94,7 @@ V = 290.3     #ft/s
 q = (0.5) * rho * V ** 2
 W_L =  W_TO#[lbf]
 e = e_1
-n =  2.866       #Load Factor
+n =  1/np.cos(45*(np.pi/180))      #Load Factor
 n_p = 0.8
 G_TO = 0.083
 G_ER = 0.04
@@ -132,15 +132,11 @@ W_over_P_TO = (P_over_W_TO)**-1
 s_L = (80 * ((W_L/S_ref) / ((rho/rho_SL)*C_L_max_L))) + S_a
 W_over_S_Landing = (s_L * (rho/rho_SL) * C_L_max_L) / 80
 
-#Glide Constraint (include because of single engine):
-
-
-
 #Climb Constraint(no climb corrections included due to immediate landing):
 V_climb = k_s_TO_climb * V_stall
-C_L_max_CL = (2*W_TO) / (rho_SL *(V_climb /k_s_TO_climb)**2)
+C_L_max_CL = (2*W_TO) / (rho *(V_climb /k_s_TO_climb)**2)
 C_L_climb = C_L_max_CL / (k_s_TO_climb**2)
-V_climb = np.sqrt((2/(rho_SL*C_L_max_CL)) * (W_over_S))
+V_climb = np.sqrt((2/(rho*C_L_max_CL)) * (W_over_S))
 
 #TO Climb:
 T_over_W_TOclimb = (((k_s_TO_climb)**2 * C_D_0)/C_L_max_CL) + ((1/(np.pi*e_2*AR)) * ((C_L_max_CL/(k_s_TO_climb**2)))) + G_TO
@@ -168,7 +164,7 @@ T_over_W_Cieling_abs = 2*np.sqrt(k*C_D_0)
 P_over_W_Cieling_abs = T_over_W_Cieling_abs / ((550*n_p)/np.sqrt((2/(rho*C_L_max))*(W_over_S)))
 W_over_P_Cieling_abs = P_over_W_Cieling_abs**(-1)
 
-#Maneuver Constraint: **STILL NEED TO COMPUTE THE LOAD FACTOR AND MANEUVER STALL SPEED**
+#Maneuver Constraint:
 T_over_W_maneuver = ((q_crz*C_D_0)/(W_over_S)) + (k*(n**2 / q)*(W_over_S))
 P_over_w_maneuver = T_over_W_maneuver / ((550*n_p)/np.sqrt((2/(rho*C_L_max))*(W_over_S)))
 W_over_P_maneuver = P_over_w_maneuver**(-1)
@@ -189,12 +185,12 @@ plt.plot(W_over_S, W_over_P_Cieling_abs, color='olive', linewidth=line, label='A
 plt.plot(W_over_S, W_over_P_maneuver, color='lime', linewidth=line, label='Manuever')
 
 plt.fill_between(W_over_S, W_over_P_TOclimb, where=((W_over_P_TOclimb < W_over_P_crz) & (W_over_S_Stall > W_over_S )), color='#00FFFF')
-plt.fill_between(W_over_S, W_over_P_crz, where=((W_over_P_crz < W_over_P_BALKclimb) & (8 >= W_over_S )), color='#00FFFF', label = 'Feasibility Region')
+plt.fill_between(W_over_S, W_over_P_crz, where=((W_over_P_crz < W_over_P_BALKclimb) & (14 >= W_over_S )), color='#00FFFF', label = 'Feasibility Region')
 
-plt.scatter(W_over_S_Stall, 1.943, color='red', zorder=5, label='Design Point')
+plt.scatter(W_over_S_Stall, 4.5, color='red', zorder=5, label='Design Point')
 
-plt.legend(loc='best', fontsize='10', framealpha=1)
+plt.legend(loc='best', fontsize='8', framealpha=1)
 plt.axhline(y=0, color='black', linestyle='-', linewidth=1)  
 plt.axvline(x=0, color='black', linestyle='-', linewidth=1)  
-plt.ylim(-1,50)
+plt.ylim(-1,40)
 plt.show()
