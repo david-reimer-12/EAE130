@@ -1,0 +1,565 @@
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+import pandas as pd
+import sympy as sy
+
+#Data from the OpenVSP file:
+b = 47              #[ft]
+chord = 6.27219     #[ft]
+S_ref = 294.79293      #[ft^2]
+AR = 7.45293
+
+def ZeroLiftDrag():
+    c = 1.0447      #Ag aircraft constant (Roskam)
+    d = 0.5326      #Ag aircraft constant (Roskam)
+    W_TO = 5812     #Take off weight [lbs]
+    S_wet = (10**c) * (W_TO**d)     #Wetted surface area [ft^2]
+
+    C_f = 0.0055    #Estimated skin friction coefficient (Raymer)
+    a = -2.2218     #Constant based on C_f (Roskam)
+    b = 1.00        #Constant based on C_f (Roskam)
+
+    f = 10**(a + b*(np.log10(S_wet)))       #logarithmic equation for equivalent parasite area (Roskam)
+
+    #Here we will add in additional zero lift drag paramater like canapy and control surface gaps:
+    C_d_0_CS = 0.0005       #Additional drag coefficient value for control surface gaps
+    C_d_0_C = 0.0004        #Additional drag coefficient value for Canopy design
+    C_d_0_A = 0.0008        #Additional drag coefficient value for GPS antenna
+
+    C_d_0 = (f / S_ref) + C_d_0_CS + C_d_0_C + C_d_0_A
+    return C_d_0
+
+C_d_0 = ZeroLiftDrag()
+print("Zero-Lift Drag Coefficient (C_d_0):", C_d_0)
+
+
+
+def Configuration_Values(configuration):
+    drag_LG = 0.015
+    drag_Flaps_TO = 0.01
+    drag_Flaps_L = 0.060
+    e_clean = 0.825
+    e_LG = e_clean
+    e_Flaps_TO = 0.775
+    e_Flaps_L = 0.725
+
+    if configuration == 1:
+        del_C_d_0 = drag_LG
+        e = e_LG
+    elif configuration == 2:
+        del_C_d_0 = drag_LG + drag_Flaps_TO
+        e = e_Flaps_TO
+    elif configuration == 3:
+        del_C_d_0 = drag_LG + drag_Flaps_L
+        e = e_Flaps_L
+    else:
+        return "Configuration input is not possible"
+    return del_C_d_0, e
+
+#Create an array of values for C_L:
+C_L = np.linspace(-2,2,100)
+
+del_C_d_0_1, e_1 = Configuration_Values(1)
+del_C_d_0_2, e_2 = Configuration_Values(2)
+del_C_d_0_3, e_3 = Configuration_Values(3)
+
+C_D_1 = (C_d_0 + del_C_d_0_1) + ((C_L**2) / (np.pi * e_1 * AR))
+C_D_2 = (C_d_0 + del_C_d_0_2) + ((C_L**2) / (np.pi * e_2 * AR))
+C_D_3 = (C_d_0 + del_C_d_0_3) + ((C_L**2) / (np.pi * e_3 * AR))
+
+
+plt.figure(figsize=(10,6))
+plt.title('Drag Polars for 3 Aircraft Configurations')
+plt.xlabel("$C_D$")      
+plt.ylabel("$C_L$")
+line = 3      #creates a larger linewidth
+plt.plot(C_D_1, C_L, color='blue', linewidth=line, label='Configuration #1: Static LG')
+plt.plot(C_D_2, C_L, color='red', linewidth=line, label='Configuration #2: Static LG, Takeoff Flaps')
+plt.plot(C_D_3, C_L, color='green', linewidth=line, label='Configuration #3: Static LG, Landing Flaps')
+plt.legend(loc='best', fontsize='10', framealpha=1)
+plt.show()
+
+
+#Defining all the variables:
+rho = 23.77E-4 #slug/ft3
+V_stall = 168.71   #ft/s
+C_L_max = 1.3
+C_L_max_L = 1.6
+rho_SL = 1.019E-3       #slug/ft3
+N_engine = 1
+W_takeoff = 5819        #lbs
+W_TO = W_takeoff        #[lbs]
+C_D_0 = C_d_0
+V = 290.3     #ft/s
+q = (0.5) * rho * V ** 2
+W_L =  W_TO#[lbf]
+e = e_1
+n =  1/np.cos(45*(np.pi/180))      #Load Factor
+n_p = 0.8
+G_TO = 0.083
+G_ER = 0.04
+G_BALK = 0.03
+W_cruise = W_TO
+W = W_TO
+S_a = 600   #[ft]
+k_s_TO_climb = 1.2
+k_s_ER_climb = 1.3
+k_s_BALK = 1.3
+V_crz = V
+k= 1/(np.pi*e_1*AR)
+
+P_ratio = 1.33
+
+# Solving for TOP23
+a = 0.0149
+b = 8.134
+c = -1500
+coefficients = [a,b,c]
+roots = np.roots(coefficients)
+TOP_23 = max(roots)
+
+W_over_S = np.linspace(0,50,200)
+
+#Stall Constraint:
+W_over_S_Stall = (1/2) * rho * (V_stall**2) * C_L_max
+
+#Takeoff Constraint:
+P_over_W_TO = (W_over_S / (TOP_23 * (rho/rho_SL) * C_L_max))
+W_over_P_TO = (P_over_W_TO)**-1
+
+#Landing Constraint: (no converison is used between takeoff and landing weight as we have set them equal for an immediate landing need)
+#Also a vertical line, no conversion needed
+s_L = (80 * ((W_L/S_ref) / ((rho/rho_SL)*C_L_max_L))) + S_a
+W_over_S_Landing = (s_L * (rho/rho_SL) * C_L_max_L) / 80
+
+#Climb Constraint(no climb corrections included due to immediate landing):
+V_climb = k_s_TO_climb * V_stall
+C_L_max_CL = (2*W_TO) / (rho *(V_climb /k_s_TO_climb)**2)
+C_L_climb = C_L_max_CL / (k_s_TO_climb**2)
+V_climb = np.sqrt((2/(rho*C_L_max_CL)) * (W_over_S))
+
+#TO Climb:
+T_over_W_TOclimb = (((k_s_TO_climb)**2 * C_D_0)/C_L_max_CL) + ((1/(np.pi*e_2*AR)) * ((C_L_max_CL/(k_s_TO_climb**2)))) + G_TO
+P_over_W_TOclimb = T_over_W_TOclimb / ((550*n_p)/V_climb)
+W_over_P_TOclimb = (P_over_W_TOclimb)**(-1)
+
+#En Route Climb:
+T_over_W_ERclimb = (((k_s_ER_climb)**2 * C_D_0)/C_L_max_CL) + ((1/(np.pi*e_1*AR)) * ((C_L_max_CL/(k_s_ER_climb**2)))) + G_ER
+P_over_W_ERclimb = T_over_W_ERclimb / ((550*n_p)/V_climb)
+W_over_P_ERclimb = (P_over_W_ERclimb)**(-1)
+
+#Balked Climb:
+T_over_W_BALKclimb = (((k_s_BALK)**2 * C_D_0)/C_L_max_CL) + ((1/(np.pi*e_1*AR)) * ((C_L_max_CL/(k_s_ER_climb**2)))) + G_BALK
+P_over_W_BALKclimb = T_over_W_BALKclimb / ((550*n_p)/V_climb)
+W_over_P_BALKclimb = (P_over_W_BALKclimb)**(-1)
+
+#Cruise Constraint:
+q_crz = 0.5 * rho * (V_crz**2)
+T_over_W_crz = (((q_crz*C_D_0) / (W_over_S)) + (k/q_crz)*(W_over_S))
+P_over_W_crz = T_over_W_crz / ((550*n_p)/V_crz)
+W_over_P_crz = P_over_W_crz**(-1)
+
+#Absolute Ceiling Constraint:
+T_over_W_Cieling_abs = 2*np.sqrt(k*C_D_0)
+P_over_W_Cieling_abs = T_over_W_Cieling_abs / ((550*n_p)/np.sqrt((2/(rho*C_L_max))*(W_over_S)))
+W_over_P_Cieling_abs = P_over_W_Cieling_abs**(-1)
+
+#Maneuver Constraint:
+T_over_W_maneuver = ((q_crz*C_D_0)/(W_over_S)) + (k*(n**2 / q)*(W_over_S))
+P_over_w_maneuver = T_over_W_maneuver / ((550*n_p)/np.sqrt((2/(rho*C_L_max))*(W_over_S)))
+W_over_P_maneuver = P_over_w_maneuver**(-1)
+
+plt.figure(figsize=(10,6))
+plt.title('Constraint Diagram')
+plt.xlabel("Wing Loading (W/S) [lb/ft^2]")      
+plt.ylabel("Power Loading (W/P) [lb/hp]")
+line = 1
+plt.axvline(x=W_over_S_Stall, color='r', linestyle='-', label='Stall')  
+plt.plot(W_over_S, W_over_P_TO, color='blue', linewidth=line, label='Takeoff')
+plt.axvline(x=W_over_S_Landing, color='green', linestyle='-', label='Landing')  
+plt.plot(W_over_S, W_over_P_TOclimb, color='purple', linewidth=line, label='TO Climb')
+plt.plot(W_over_S, W_over_P_ERclimb, color='pink', linewidth=line, label='EnRoute Climb')
+plt.plot(W_over_S, W_over_P_BALKclimb, color='brown', linewidth=line, label='Balked Climb')
+plt.plot(W_over_S, W_over_P_crz, color='orange', linewidth=line, label='Cruise')
+plt.plot(W_over_S, W_over_P_Cieling_abs, color='olive', linewidth=line, label='Absolute Ceiling')
+plt.plot(W_over_S, W_over_P_maneuver, color='lime', linewidth=line, label='Manuever')
+
+plt.fill_between(W_over_S, W_over_P_TOclimb, where=((W_over_P_TOclimb < W_over_P_crz) & (W_over_S_Stall > W_over_S )), color='#00FFFF')
+plt.fill_between(W_over_S, W_over_P_crz, where=((W_over_P_crz < W_over_P_BALKclimb) & (14 >= W_over_S )), color='#00FFFF', label = 'Feasibility Region')
+
+plt.scatter(W_over_S_Stall, 4.5, color='red', zorder=5, label='Design Point')
+
+plt.legend(loc='best', fontsize='8', framealpha=1)
+plt.axhline(y=0, color='black', linestyle='-', linewidth=1)  
+plt.axvline(x=0, color='black', linestyle='-', linewidth=1)  
+plt.ylim(-1,40)
+plt.show()
+
+
+
+
+# symbolic power variables
+P_f, P_gt, P_gb, P_s1, P_e1, P_gt, P_p1 = sy.symbols("P_f P_gt P_gb P_s1 P_e1 P_gt P_p1", real=True)
+
+# efficiency values
+n_gt = 0.43
+n_gb = 0.98
+n_p1 = 0.80
+n_em1 = 0.95
+n_pm = 0.95
+
+phi = P_gt / (P_gt + P_f)  # Supplied Power Ratio
+
+P_p_over_W = 1 / 5  # power-to-weight ratio
+W = 1  # normalized weight
+
+A = sy.Matrix([
+    [-n_gt, 1, 0, 0, 0, 0, 0],
+    [0, -n_gb, -n_gb, 1, 0, 0, 0],
+    [0, 0, 0, -n_p1, 0, 0, 1],
+    [0, 0, 1, 0, -n_em1, 0, 0],
+    [0, 0, 0, 0, 1, -n_pm, 0],    
+    [-phi, 0, 0, 0, 0, 1 - phi, 0],
+    [0, 0, 0, 0, 0, 0, 1]
+])
+
+B = sy.Matrix([
+    P_f / W,
+    P_gt / W,
+    P_gb / W,
+    P_s1 / W,
+    P_e1 / W,
+    P_gt / W,
+    P_p1 / W
+])
+
+C = sy.Matrix([
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    P_p_over_W
+])
+
+solution = sy.linsolve((A, C))
+print(solution)
+
+n_gt = 0.43
+n_gb = 0.98
+n_p1 = 0.80
+n_em1 = 0.95
+n_pm = 0.95
+n_em2 = 0
+n_p2 = 0
+
+psi = 0
+phi = .5  # Supplied Power Ratio
+P_p_over_W = 1 / 5
+
+# Define the system of equations using numpy
+A = np.array([
+    [-n_gt, 1, 0, 0, 0, 0, 0],
+    [0, -n_gb, -n_gb, 1, 0, 0, 0],
+    [0, 0, 0, -n_p1, 0, 0, 1],
+    [0, 0, 1, 0, -n_em1, 0, 0],
+    [0, 0, 0, 0, 1, -n_pm, 0],    
+    [-phi, 0, 0, 0, 0, 1 - phi, 0],
+    [0, 0, 0, 0, 0, 0, 1]
+])
+
+
+C = np.array([
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    P_p_over_W
+])
+
+solution = np.linalg.solve(A, C)
+print(solution)
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Fuel Power
+P_f = (solution[0] * W)**-1
+
+# Modify the power loading calculations to use P_f
+W_over_P_f_TO = (P_over_W_TO * P_f)**(-1)
+W_over_P_f_TOclimb = (P_over_W_TOclimb * P_f)**(-1)
+W_over_P_f_ERclimb = (P_over_W_ERclimb * P_f)**(-1)
+W_over_P_f_BALKclimb = (P_over_W_BALKclimb * P_f)**(-1)
+W_over_P_f_crz = (P_over_W_crz * P_f)**(-1)
+W_over_P_f_Cieling_abs = (P_over_W_Cieling_abs * P_f)**(-1)
+W_over_P_f_maneuver = (P_over_w_maneuver * P_f)**(-1)
+
+# Plot the modified power loading diagram
+plt.figure(figsize=(10,6))
+plt.title('Power Loading Diagram (W/S vs. W/P_f)')
+plt.xlabel("Wing Loading (W/S) [lb/ft^2]")      
+plt.ylabel("Power Loading (W/P_f) [lb/hp]")
+line = 1
+plt.axvline(x=W_over_S_Stall, color='r', linestyle='-', label='Stall')  
+plt.plot(W_over_S, W_over_P_f_TO, color='blue', linewidth=line, label='Takeoff')
+plt.axvline(x=W_over_S_Landing, color='green', linestyle='-', label='Landing')  
+plt.plot(W_over_S, W_over_P_f_TOclimb, color='purple', linewidth=line, label='TO Climb')
+plt.plot(W_over_S, W_over_P_f_ERclimb, color='pink', linewidth=line, label='EnRoute Climb')
+plt.plot(W_over_S, W_over_P_f_BALKclimb, color='brown', linewidth=line, label='Balked Climb')
+plt.plot(W_over_S, W_over_P_f_crz, color='orange', linewidth=line, label='Cruise')
+plt.plot(W_over_S, W_over_P_f_Cieling_abs, color='olive', linewidth=line, label='Absolute Ceiling')
+plt.plot(W_over_S, W_over_P_f_maneuver, color='lime', linewidth=line, label='Maneuver')
+
+plt.fill_between(W_over_S, W_over_P_f_TOclimb, where=((W_over_P_f_TOclimb < W_over_P_f_crz) & (W_over_S_Stall > W_over_S )), color='#00FFFF')
+plt.fill_between(W_over_S, W_over_P_f_crz, where=((W_over_P_f_crz < W_over_P_f_BALKclimb) & (14 >= W_over_S )), color='#00FFFF', label = 'Feasibility Region')
+
+plt.scatter(W_over_S_Stall, 0.73, color='red', zorder=5, label='Design Point')
+
+plt.legend(loc='best', fontsize='8', framealpha=1)
+plt.axhline(y=0, color='black', linestyle='-', linewidth=1)  
+plt.axvline(x=0, color='black', linestyle='-', linewidth=1)  
+plt.ylim(-1,20)
+plt.show()
+
+
+# Gas Turbine Power
+P_gt = (solution[1] * W)**-1
+
+# Modify the power loading calculations to use P_gt
+W_over_P_gt_TO = (P_over_W_TO * P_gt)**(-1)
+W_over_P_gt_TOclimb = (P_over_W_TOclimb * P_gt)**(-1)
+W_over_P_gt_ERclimb = (P_over_W_ERclimb * P_gt)**(-1)
+W_over_P_gt_BALKclimb = (P_over_W_BALKclimb * P_gt)**(-1)
+W_over_P_gt_crz = (P_over_W_crz * P_gt)**(-1)
+W_over_P_gt_Cieling_abs = (P_over_W_Cieling_abs * P_gt)**(-1)
+W_over_P_gt_maneuver = (P_over_w_maneuver * P_gt)**(-1)
+
+# Plot the modified power loading diagram
+plt.figure(figsize=(10,6))
+plt.title('Power Loading Diagram (W/S vs. W/P_gt)')
+plt.xlabel("Wing Loading (W/S) [lb/ft^2]")      
+plt.ylabel("Power Loading (W/P_gt) [lb/hp]")
+line = 1
+plt.axvline(x=W_over_S_Stall, color='r', linestyle='-', label='Stall')  
+plt.plot(W_over_S, W_over_P_gt_TO, color='blue', linewidth=line, label='Takeoff')
+plt.axvline(x=W_over_S_Landing, color='green', linestyle='-', label='Landing')  
+plt.plot(W_over_S, W_over_P_gt_TOclimb, color='purple', linewidth=line, label='TO Climb')
+plt.plot(W_over_S, W_over_P_gt_ERclimb, color='pink', linewidth=line, label='EnRoute Climb')
+plt.plot(W_over_S, W_over_P_gt_BALKclimb, color='brown', linewidth=line, label='Balked Climb')
+plt.plot(W_over_S, W_over_P_gt_crz, color='orange', linewidth=line, label='Cruise')
+plt.plot(W_over_S, W_over_P_gt_Cieling_abs, color='olive', linewidth=line, label='Absolute Ceiling')
+plt.plot(W_over_S, W_over_P_gt_maneuver, color='lime', linewidth=line, label='Maneuver')
+
+plt.fill_between(W_over_S, W_over_P_gt_TOclimb, where=((W_over_P_gt_TOclimb < W_over_P_gt_crz) & (W_over_S_Stall > W_over_S )), color='#00FFFF')
+plt.fill_between(W_over_S, W_over_P_gt_crz, where=((W_over_P_gt_crz < W_over_P_gt_BALKclimb) & (14 >= W_over_S )), color='#00FFFF', label = 'Feasibility Region')
+
+plt.scatter(W_over_S_Stall, 0.32, color='red', zorder=5, label='Design Point')
+
+plt.legend(loc='best', fontsize='8', framealpha=1)
+plt.axhline(y=0, color='black', linestyle='-', linewidth=1)  
+plt.axvline(x=0, color='black', linestyle='-', linewidth=1)  
+plt.ylim(-1,20)
+plt.show()
+
+
+# Gearbox Power
+P_gb = (solution[2] * W)**-1
+
+# Modify the power loading calculations to use P_gb
+W_over_P_gb_TO = (P_over_W_TO * P_gb)**(-1)
+W_over_P_gb_TOclimb = (P_over_W_TOclimb * P_gb)**(-1)
+W_over_P_gb_ERclimb = (P_over_W_ERclimb * P_gb)**(-1)
+W_over_P_gb_BALKclimb = (P_over_W_BALKclimb * P_gb)**(-1)
+W_over_P_gb_crz = (P_over_W_crz * P_gb)**(-1)
+W_over_P_gb_Cieling_abs = (P_over_W_Cieling_abs * P_gb)**(-1)
+W_over_P_gb_maneuver = (P_over_w_maneuver * P_gb)**(-1)
+
+# Plot the modified power loading diagram
+plt.figure(figsize=(10,6))
+plt.title('Power Loading Diagram (W/S vs. W/P_gb)')
+plt.xlabel("Wing Loading (W/S) [lb/ft^2]")      
+plt.ylabel("Power Loading (W/P_gb) [lb/hp]")
+line = 1
+plt.axvline(x=W_over_S_Stall, color='r', linestyle='-', label='Stall')  
+plt.plot(W_over_S, W_over_P_gb_TO, color='blue', linewidth=line, label='Takeoff')
+plt.axvline(x=W_over_S_Landing, color='green', linestyle='-', label='Landing')  
+plt.plot(W_over_S, W_over_P_gb_TOclimb, color='purple', linewidth=line, label='TO Climb')
+plt.plot(W_over_S, W_over_P_gb_ERclimb, color='pink', linewidth=line, label='EnRoute Climb')
+plt.plot(W_over_S, W_over_P_gb_BALKclimb, color='brown', linewidth=line, label='Balked Climb')
+plt.plot(W_over_S, W_over_P_gb_crz, color='orange', linewidth=line, label='Cruise')
+plt.plot(W_over_S, W_over_P_gb_Cieling_abs, color='olive', linewidth=line, label='Absolute Ceiling')
+plt.plot(W_over_S, W_over_P_gb_maneuver, color='lime', linewidth=line, label='Maneuver')
+
+plt.fill_between(W_over_S, W_over_P_gb_TOclimb, where=((W_over_P_gb_TOclimb < W_over_P_gb_crz) & (W_over_S_Stall > W_over_S )), color='#00FFFF')
+plt.fill_between(W_over_S, W_over_P_gb_crz, where=((W_over_P_gb_crz < W_over_P_gb_BALKclimb) & (14 >= W_over_S )), color='#00FFFF', label = 'Feasibility Region')
+
+plt.scatter(W_over_S_Stall, 0.65, color='red', zorder=5, label='Design Point')
+
+plt.legend(loc='best', fontsize='8', framealpha=1)
+plt.axhline(y=0, color='black', linestyle='-', linewidth=1)  
+plt.axvline(x=0, color='black', linestyle='-', linewidth=1)  
+plt.ylim(-1,20)
+plt.show()
+
+# Electric Motor Power
+P_em = (solution[3] * W)**-1
+
+# Modify the power loading calculations to use P_em
+W_over_P_em_TO = (P_over_W_TO * P_em)**(-1)
+W_over_P_em_TOclimb = (P_over_W_TOclimb * P_em)**(-1)
+W_over_P_em_ERclimb = (P_over_W_ERclimb * P_em)**(-1)
+W_over_P_em_BALKclimb = (P_over_W_BALKclimb * P_em)**(-1)
+W_over_P_em_crz = (P_over_W_crz * P_em)**(-1)
+W_over_P_em_Cieling_abs = (P_over_W_Cieling_abs * P_em)**(-1)
+W_over_P_em_maneuver = (P_over_w_maneuver * P_em)**(-1)
+
+# Plot the modified power loading diagram
+plt.figure(figsize=(10,6))
+plt.title('Power Loading Diagram (W/S vs. W/P_em)')
+plt.xlabel("Wing Loading (W/S) [lb/ft^2]")      
+plt.ylabel("Power Loading (W/P_em) [lb/hp]")
+line = 1
+plt.axvline(x=W_over_S_Stall, color='r', linestyle='-', label='Stall')  
+plt.plot(W_over_S, W_over_P_em_TO, color='blue', linewidth=line, label='Takeoff')
+plt.axvline(x=W_over_S_Landing, color='green', linestyle='-', label='Landing')  
+plt.plot(W_over_S, W_over_P_em_TOclimb, color='purple', linewidth=line, label='TO Climb')
+plt.plot(W_over_S, W_over_P_em_ERclimb, color='pink', linewidth=line, label='EnRoute Climb')
+plt.plot(W_over_S, W_over_P_em_BALKclimb, color='brown', linewidth=line, label='Balked Climb')
+plt.plot(W_over_S, W_over_P_em_crz, color='orange', linewidth=line, label='Cruise')
+plt.plot(W_over_S, W_over_P_em_Cieling_abs, color='olive', linewidth=line, label='Absolute Ceiling')
+plt.plot(W_over_S, W_over_P_em_maneuver, color='lime', linewidth=line, label='Maneuver')
+
+plt.fill_between(W_over_S, W_over_P_em_TOclimb, where=((W_over_P_em_TOclimb < W_over_P_em_crz) & (W_over_S_Stall > W_over_S )), color='#00FFFF')
+plt.fill_between(W_over_S, W_over_P_em_crz, where=((W_over_P_em_crz < W_over_P_em_BALKclimb) & (14 >= W_over_S )), color='#00FFFF', label = 'Feasibility Region')
+
+plt.scatter(W_over_S_Stall, 1.05, color='red', zorder=5, label='Design Point')
+
+plt.legend(loc='best', fontsize='8', framealpha=1)
+plt.axhline(y=0, color='black', linestyle='-', linewidth=1)  
+plt.axvline(x=0, color='black', linestyle='-', linewidth=1)  
+plt.ylim(-1,20)
+plt.show()
+
+# Shaft Power
+P_s = (solution[4] * W)**-1
+
+# Modify the power loading calculations to use P_s
+W_over_P_s_TO = (P_over_W_TO * P_s)**(-1)
+W_over_P_s_TOclimb = (P_over_W_TOclimb * P_s)**(-1)
+W_over_P_s_ERclimb = (P_over_W_ERclimb * P_s)**(-1)
+W_over_P_s_BALKclimb = (P_over_W_BALKclimb * P_s)**(-1)
+W_over_P_s_crz = (P_over_W_crz * P_s)**(-1)
+W_over_P_s_Cieling_abs = (P_over_W_Cieling_abs * P_s)**(-1)
+W_over_P_s_maneuver = (P_over_w_maneuver * P_s)**(-1)
+
+# Plot the modified power loading diagram
+plt.figure(figsize=(10,6))
+plt.title('Power Loading Diagram (W/S vs. W/P_s)')
+plt.xlabel("Wing Loading (W/S) [lb/ft^2]")      
+plt.ylabel("Power Loading (W/P_s) [lb/hp]")
+line = 1
+plt.axvline(x=W_over_S_Stall, color='r', linestyle='-', label='Stall')  
+plt.plot(W_over_S, W_over_P_s_TO, color='blue', linewidth=line, label='Takeoff')
+plt.axvline(x=W_over_S_Landing, color='green', linestyle='-', label='Landing')  
+plt.plot(W_over_S, W_over_P_s_TOclimb, color='purple', linewidth=line, label='TO Climb')
+plt.plot(W_over_S, W_over_P_s_ERclimb, color='pink', linewidth=line, label='EnRoute Climb')
+plt.plot(W_over_S, W_over_P_s_BALKclimb, color='brown', linewidth=line, label='Balked Climb')
+plt.plot(W_over_S, W_over_P_s_crz, color='orange', linewidth=line, label='Cruise')
+plt.plot(W_over_S, W_over_P_s_Cieling_abs, color='olive', linewidth=line, label='Absolute Ceiling')
+plt.plot(W_over_S, W_over_P_s_maneuver, color='lime', linewidth=line, label='Maneuver')
+
+plt.fill_between(W_over_S, W_over_P_s_TOclimb, where=((W_over_P_s_TOclimb < W_over_P_s_crz) & (W_over_S_Stall > W_over_S )), color='#00FFFF')
+plt.fill_between(W_over_S, W_over_P_s_crz, where=((W_over_P_s_crz < W_over_P_s_BALKclimb) & (14 >= W_over_S )), color='#00FFFF', label = 'Feasibility Region')
+
+plt.scatter(W_over_S_Stall, 0.73, color='red', zorder=5, label='Design Point')
+
+plt.legend(loc='best', fontsize='8', framealpha=1)
+plt.axhline(y=0, color='black', linestyle='-', linewidth=1)  
+plt.axvline(x=0, color='black', linestyle='-', linewidth=1)  
+plt.ylim(-1,20)
+plt.show()
+
+
+# Battery Power
+P_bat = (solution[5] * W)**-1
+
+# Modify the power loading calculations to use P_bat
+W_over_P_bat_TO = (P_over_W_TO * P_bat)**(-1)
+W_over_P_bat_TOclimb = (P_over_W_TOclimb * P_bat)**(-1)
+W_over_P_bat_ERclimb = (P_over_W_ERclimb * P_bat)**(-1)
+W_over_P_bat_BALKclimb = (P_over_W_BALKclimb * P_bat)**(-1)
+W_over_P_bat_crz = (P_over_W_crz * P_bat)**(-1)
+W_over_P_bat_Cieling_abs = (P_over_W_Cieling_abs * P_bat)**(-1)
+W_over_P_bat_maneuver = (P_over_w_maneuver * P_bat)**(-1)
+
+# Plot the modified power loading diagram
+plt.figure(figsize=(10,6))
+plt.title('Power Loading Diagram (W/S vs. W/P_bat)')
+plt.xlabel("Wing Loading (W/S) [lb/ft^2]")      
+plt.ylabel("Power Loading (W/P_bat) [lb/hp]")
+line = 1
+plt.axvline(x=W_over_S_Stall, color='r', linestyle='-', label='Stall')  
+plt.plot(W_over_S, W_over_P_bat_TO, color='blue', linewidth=line, label='Takeoff')
+plt.axvline(x=W_over_S_Landing, color='green', linestyle='-', label='Landing')  
+plt.plot(W_over_S, W_over_P_bat_TOclimb, color='purple', linewidth=line, label='TO Climb')
+plt.plot(W_over_S, W_over_P_bat_ERclimb, color='pink', linewidth=line, label='EnRoute Climb')
+plt.plot(W_over_S, W_over_P_bat_BALKclimb, color='brown', linewidth=line, label='Balked Climb')
+plt.plot(W_over_S, W_over_P_bat_crz, color='orange', linewidth=line, label='Cruise')
+plt.plot(W_over_S, W_over_P_bat_Cieling_abs, color='olive', linewidth=line, label='Absolute Ceiling')
+plt.plot(W_over_S, W_over_P_bat_maneuver, color='lime', linewidth=line, label='Maneuver')
+
+plt.fill_between(W_over_S, W_over_P_bat_TOclimb, where=((W_over_P_bat_TOclimb < W_over_P_bat_crz) & (W_over_S_Stall > W_over_S )), color='#00FFFF')
+plt.fill_between(W_over_S, W_over_P_bat_crz, where=((W_over_P_bat_crz < W_over_P_bat_BALKclimb) & (14 >= W_over_S )), color='#00FFFF', label = 'Feasibility Region')
+
+plt.scatter(W_over_S_Stall, 0.73, color='red', zorder=5, label='Design Point')
+
+plt.legend(loc='best', fontsize='8', framealpha=1)
+plt.axhline(y=0, color='black', linestyle='-', linewidth=1)  
+plt.axvline(x=0, color='black', linestyle='-', linewidth=1)  
+plt.ylim(-1,20)
+plt.show()
+
+# Propeller Power
+P_p = (solution[6] * W)**-1
+
+# Modify the power loading calculations to use P_p
+W_over_P_p_TO = (P_over_W_TO * P_p)**(-1)
+W_over_P_p_TOclimb = (P_over_W_TOclimb * P_p)**(-1)
+W_over_P_p_ERclimb = (P_over_W_ERclimb * P_p)**(-1)
+W_over_P_p_BALKclimb = (P_over_W_BALKclimb * P_p)**(-1)
+W_over_P_p_crz = (P_over_W_crz * P_p)**(-1)
+W_over_P_p_Cieling_abs = (P_over_W_Cieling_abs * P_p)**(-1)
+W_over_P_p_maneuver = (P_over_w_maneuver * P_p)**(-1)
+
+# Plot the modified power loading diagram
+plt.figure(figsize=(10,6))
+plt.title('Power Loading Diagram (W/S vs. W/P_p)')
+plt.xlabel("Wing Loading (W/S) [lb/ft^2]")      
+plt.ylabel("Power Loading (W/P_p) [lb/hp]")
+line = 1
+plt.axvline(x=W_over_S_Stall, color='r', linestyle='-', label='Stall')  
+plt.plot(W_over_S, W_over_P_p_TO, color='blue', linewidth=line, label='Takeoff')
+plt.axvline(x=W_over_S_Landing, color='green', linestyle='-', label='Landing')  
+plt.plot(W_over_S, W_over_P_p_TOclimb, color='purple', linewidth=line, label='TO Climb')
+plt.plot(W_over_S, W_over_P_p_ERclimb, color='pink', linewidth=line, label='EnRoute Climb')
+plt.plot(W_over_S, W_over_P_p_BALKclimb, color='brown', linewidth=line, label='Balked Climb')
+plt.plot(W_over_S, W_over_P_p_crz, color='orange', linewidth=line, label='Cruise')
+plt.plot(W_over_S, W_over_P_p_Cieling_abs, color='olive', linewidth=line, label='Absolute Ceiling')
+plt.plot(W_over_S, W_over_P_p_maneuver, color='lime', linewidth=line, label='Maneuver')
+
+plt.fill_between(W_over_S, W_over_P_p_TOclimb, where=((W_over_P_p_TOclimb < W_over_P_p_crz) & (W_over_S_Stall > W_over_S )), color='#00FFFF')
+plt.fill_between(W_over_S, W_over_P_p_crz, where=((W_over_P_p_crz < W_over_P_p_BALKclimb) & (14 >= W_over_S )), color='#00FFFF', label = 'Feasibility Region')
+
+plt.scatter(W_over_S_Stall, 0.73, color='red', zorder=5, label='Design Point')
+
+plt.legend(loc='best', fontsize='8', framealpha=1)
+plt.axhline(y=0, color='black', linestyle='-', linewidth=1)  
+plt.axvline(x=0, color='black', linestyle='-', linewidth=1)  
+plt.ylim(-1,20)
+plt.show()
