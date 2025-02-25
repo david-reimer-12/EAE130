@@ -76,6 +76,24 @@ A, B = AgRegressionData()
 W0, W_e = WeightEstimation(A, B)
 E0_tot_solution = UpdatedWeight(W_e)
 
+
+W_crew = 180  # lbs
+W_payload = 2000  # lbs
+W_over_P = 0.7
+W_over_S = 43.980
+phi = 0.5
+g = 32.17
+e_f = 11950 * 1201.37  # Wh/kg for Jet A1
+e_bat = 0.8 * 400 * 1201.37  # Wh/kg
+E0_tot = E0_tot_solution
+
+W_fuel = g / e_f * (1 - phi) * E0_tot
+W_battery = g / e_bat * phi * E0_tot
+W0 = W_crew + W_payload + W_e + W_fuel + W_battery
+P = W0 / W_over_P
+S = W0 / W_over_S
 print("TOGW:", W0)
 print("Empty Weight:", W_e)
 print("Updated Energy Requirement (E0_tot):", E0_tot_solution)
+print("P:",P)
+print("S:",S)
