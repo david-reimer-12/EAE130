@@ -1,99 +1,141 @@
 import numpy as np
 import math
 from scipy.optimize import least_squares
+import matplotlib.pyplot as plt
 
-## Regression Data Ag Aircraft
 def AgRegressionData():
-    global A, B
     W0 = [3417, 2866, 6614, 9259, 4244, 10000, 7020, 3500, 3300, 3900, 6173, 6100, 10000, 6000, 6000, 6000, 12675]
     We = [2229, 1880, 3550, 5445, 2242, 4990, 3525, 2306, 2229, 2050, 3660, 2995, 4500, 3900, 3550, 3600, 7120]
     log_W0 = np.log10(W0)
     log_We = np.log10(We)
     B, A = np.polyfit(log_We, log_W0, 1)
+    return A, B
 
-## Regression Data Twin Engine Aircraft
-def TwinRegressionData():
-    global A, B
-    W0 = [3900, 5100, 6775, 9630, 5150, 5990, 6850, 6750, 7450, 8200, 6500, 7000, 5500, 3800, 3800, 8700, 3050, 2183, 9480, 10325, 7350, 2900]
-    We = [2466, 3236, 4423, 5765, 3305, 3948, 4077, 4368, 4668, 4915, 4003, 4221, 3737, 2354, 2430, 4910, 2100, 1322, 5732, 6629, 4100, 1610]
-    log_W0 = np.log10(W0)
-    log_We = np.log10(We)
-    B, A = np.polyfit(log_We, log_W0, 1)
-
-def WeightEstimation():
-    W_crew = 180  # lbs
-    W_payload = 2000  # lbs
-    Range = 3.706e6  # ft
-    Endurance = 28800  # seconds
-    V_inf = 290.303  # ft/s
-    SFC = 7.06e-9  # 1/ft
+def WeightEstimation(A, B, S_graph):
+    W_crew = 180
+    W_payload = 2000
+    Range = 3.706 * 10**6
+    Endurance = 28800
+    V_inf = 290.303
+    SFC = 7.06 * 10**(-9)
     prop_eff = 0.8
     LD_ratio = 11.8
-    W_over_P = 0.7
-    W_over_S = 43.980
-    S_ref = 294.79293
-    W_guess = 8000
-    phi = 0.5
-    g = 32.17
-    n_p1 = 0.80
-    n_p2 = 0
-    R = 3.706e6
-    e_f = 11950 * 1201.37  # Wh/kg for Jet A1
-    e_bat = 0.8 * 400 * 1201.37  # Wh/kg
-    n_3 = 0.8  # same as n_p
-    L_D = 11.8
-    epsilon = 1e-6
-
+    W_guess = 5000
+    
     cruise = math.exp(-(Range * SFC) / (prop_eff * LD_ratio))
     loiter = math.exp((-Endurance * V_inf * SFC) / (prop_eff * LD_ratio))
-    fuel_weight_ratio = 1 - 0.996 * 0.995 * 0.996 * 0.998 * 0.999 * 0.998 * cruise * loiter
+    fuel_weight_ratio = 1 - (0.996 * 0.995 * 0.996 * 0.998 * 0.999 * 0.998 * cruise * loiter)
+    
     tol = 1e-6
-    error = 2 * tol
+    error = 1
     W0 = W_guess
-
-    while tol < error:
-        empty_weight_frac = 10**(-A/B) * W0 ** (1/B - 1)
-        W0 = (W_crew + W_payload) / (1 - 1.06 * fuel_weight_ratio - empty_weight_frac) + 400
-        W_e = empty_weight_frac * W0
-        P = W0 / W_over_P
-        S = W0 / W_over_S
-        W_powerplant_ref = P**0.9306 * 10**(-0.1205)
-        W_W_ref = 2.5 * S_ref
-        We_prime = W_e - W_powerplant_ref - W_W_ref
-        
-        #R = n_3 * e_f/g * (L_D) * n_p1*np.log((W_e+W_payload+g/e_bat*E0_tot*(phi+e_bat/e_f*(1-phi)))/(W_e+W_payload+g/e_bat*phi*E0_tot))
-        #exponent = (R * g) / (n_3 * e_f * L_D * n_p1)
-        #numerator = W_e + W_payload - math.exp(exponent) * (W_e + W_payload)
-        #denominator = math.exp(exponent) * (g / e_bat) * phi - (g / e_bat) * (phi + (e_bat / e_f) * (1 - phi))
-        #E0_tot = abs(numerator / denominator)
-        def equation(E0_tot):
-            term1 = W_e + W_payload + (g / e_bat) * E0_tot * (phi + (e_bat / e_f) * (1 - phi))
-            term2 = W_e + W_payload + (g / e_bat) * phi * E0_tot
-        
-            if term1 <= 0 or term2 <= 0:
-                return 1e10  # Large penalty to discourage invalid solutions
-
-            return R - (n_3 * e_f / g * L_D * (n_p1 + n_p2 * phi / (1 - phi)) * np.log(term1 / term2 + epsilon))
-
-        solution = least_squares(equation, x0=[1e5], bounds=(1, np.inf))
-        E0_tot = solution.x[0]
-        print(E0_tot)
-
-        W_fuel = g / e_f * (1 - phi) * E0_tot
-        W_battery = g / e_bat * phi * E0_tot
-        W0_new = W_crew + W_payload + W_e + W_fuel + W_battery
-        
-        print(W0)
-        print(error)
+    
+    while error > tol:
+        empty_weight_frac = 10**(-A / B) * W0**(1 / B - 1)
+        W0_new = (W_crew + W_payload) / (1 - 1.06 * fuel_weight_ratio - empty_weight_frac)
         error = abs((W0_new - W0) / W0_new)
         W0 = W0_new
+    
+    W_e = empty_weight_frac * W0 + 2.5 * S_graph
+    return W0, W_e
 
-        if tol > error:
-            W_e = empty_weight_frac * W0
-            print("TOGW:", W0)
-            print("Empty Weight:", W_e)
-            print("Solved E0_tot:", E0_tot)
+def UpdatedWeight(W_e):
+    W_payload = 2000
+    R = 3.706 * 10**6
+    e_f = 11950
+    e_bat = 0.8 * 250
+    n_3 = 0.8
+    L_D = 11.8
+    g = 32.17
+    phi = 0.5
+    n_p1 = 0.80
+    n_p2 = 0
+    epsilon = 1e-6  # Small value to prevent log(0) or division errors
+    
+    def equation(E0_tot):
+        term1 = W_e + W_payload + (g / e_bat) * E0_tot * (phi + (e_bat / e_f) * (1 - phi))
+        term2 = W_e + W_payload + (g / e_bat) * phi * E0_tot
+        if term1 <= 0 or term2 <= 0:
+            return 1e10  # Large penalty to discourage invalid solutions
+        return R - (n_3 * e_f / g * L_D * (n_p1 + n_p2 * phi / (1 - phi)) * np.log(term1 / term2 + epsilon))
+    
+    solution = least_squares(equation, x0=[1e5], bounds=(1, np.inf))
+    if not solution.success:
+        print("Warning: Solution may not have converged.")
+    return solution.x[0]
 
-# Run the functions
-AgRegressionData()
-WeightEstimation()
+# Main analysis with varying S_graph
+A, B = AgRegressionData()
+
+# Create arrays to store results
+S_graph_values = np.linspace(0, 500, 51)  # 51 points from 0 to 500
+W0_values = []
+W_e_values = []
+P_values = []
+S_values = []
+
+for S_graph in S_graph_values:
+    W0, W_e = WeightEstimation(A, B, S_graph)
+    E0_tot_solution = UpdatedWeight(W_e)
+    
+    W_crew = 180  # lbs
+    W_payload = 2000  # lbs
+    W_over_P = 0.7
+    W_over_S = 43.980
+    phi = 0.5
+    g = 32.17
+    e_f = 11950 * 1201.37  # Wh/kg for Jet A1
+    e_bat = 0.8 * 400 * 1201.37  # Wh/kg
+    E0_tot = E0_tot_solution
+    W_fuel = g / e_f * (1 - phi) * E0_tot
+    W_battery = g / e_bat * phi * E0_tot
+    
+    W0_updated = W_crew + W_payload + W_e + W_fuel + W_battery
+    P = W0_updated / W_over_P
+    S = W0_updated / W_over_S
+    
+    # Store results
+    W0_values.append(W0_updated)
+    W_e_values.append(W_e)
+    P_values.append(P)
+    S_values.append(S)
+    
+    # Print details for last iteration only
+    if S_graph == S_graph_values[-1]:
+        print("TOGW:", W0_updated)
+        print("Empty Weight:", W_e)
+        print("Updated Energy Requirement (E0_tot):", E0_tot_solution)
+        print("P:", P)
+        print("S:", S)
+
+# Sort data points for a smooth plot (based on S values)
+sorted_indices = np.argsort(S_values)
+S_values_sorted = np.array(S_values)[sorted_indices]
+P_values_sorted = np.array(P_values)[sorted_indices]
+S_graph_values_sorted = np.array(S_graph_values)[sorted_indices]
+
+# Plot Wing Area (S) vs Power
+plt.figure(figsize=(10, 6))
+plt.plot(S_values_sorted, P_values_sorted, 'b-', linewidth=2)
+plt.title('Wing Area vs Power Required')
+plt.xlabel('Wing Area (ft²)')
+plt.ylabel('Power Required (ft-lb/s)')
+plt.grid(True)
+plt.tight_layout()
+
+# Plot S_graph vs calculated S
+plt.figure(figsize=(10, 6))
+plt.plot(S_graph_values, S_values, 'r-', linewidth=2)
+plt.title('S_graph vs Calculated Wing Area')
+plt.xlabel('S_graph Input Value')
+plt.ylabel('Calculated Wing Area (ft²)')
+plt.grid(True)
+plt.tight_layout()
+
+# Save the results to a CSV file
+results = np.column_stack((S_graph_values, S_values, P_values, W0_values, W_e_values))
+np.savetxt('aircraft_design_results.csv', results, delimiter=',', 
+           header='S_graph,Wing_Area,Power,TOGW,Empty_Weight', comments='')
+
+plt.show()
+print("Results saved to 'aircraft_design_results.csv'")
