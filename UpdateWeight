@@ -1,7 +1,9 @@
 import numpy as np
-import sympy as sp
 import pandas as pd
 import math 
+from scipy.optimize import fsolve
+import time
+import pdb
 ## Regression Data Ag Aircraft
 def AgRegressionData():
     global A, B
@@ -20,9 +22,132 @@ def TwinRegressionData():
     log_We = np.log10(We)
     B, A = np.polyfit(log_We, log_W0,1)
 
+def WePrime():
+    global A, B
+    W0 = [3417,2866,6614,9259,4244,10000,7020,3500,3300,3900,6173,6100,10000,6000,6000,6000,12675]
+    We = [2229,1880,3550,5445,2242,4990,3525,2306,2229,2050,3660,2995,4500,3900,3550,3600,7120]
+    log_W0 = np.log10(W0)
+    log_We = np.log10(We)
+    B, A = np.polyfit(log_We, log_W0,1)
+
+def ComparableAircraftWe():
+    global C_comparable, A_comparable
+    #Comparable Aircraft W_e'
+    #AT-502
+    W_e_AT = 4650
+    S_AT = 312
+    W_pwr_AT = 331
+    W_e_prime_AT = W_e_AT - 2.5*S_AT - W_pwr_AT
+    W0_AT = 10480
+    #Ag Cat
+    W_e_Ag = 3335
+    S_Ag = 328
+    W_pwr_Ag = 505
+    W_e_prime_Ag = W_e_Ag - 2.5*S_Ag - W_pwr_Ag
+    W0_Ag = 4500
+    #Thrush 
+    W_e_Th = 4800
+    S_Th = 365
+    W_pwr_Th = 390
+    W_e_prime_Th = W_e_Th - 2.5*S_Th - W_pwr_Th
+    W0_Th = 10500
+    #AT-802
+    W_e_AT802 = 6751
+    S_AT802 = 401
+    W_pwr_AT802 = 486
+    W_e_prime_AT802 = W_e_AT802 - 2.5*S_AT802 - W_pwr_AT802
+    W0_AT802 = 16000
+
+    W0 = np.array([W0_AT, W0_Ag, W0_Th, W0_AT802])
+    W_e_prime = np.array([W_e_prime_AT, W_e_prime_Ag, W_e_prime_Th, W_e_prime_AT802])
+    x = np.log(W0)
+    y = np.log(W_e_prime/W0)
+
+    C_comparable, D = np.polyfit(x,y,1)
+    A_comparable = np.exp(D)
+    print(C_comparable)
+
+
+def WeightEstimationUpdated():
+    W_crew = 180 #lbs
+    W_payload = 2000 #lbs
+
+    W_engine = 500
+
+    phi = 0.5
+    g = 32.17
+    n_p1 = 0.80
+    n_p2 = 0
+    n_3 = 0.8
+
+    e_f = 43 * 947.817/2.20462 #BTU/lbm
+    e_bat = 0.8 * 500 * 3.41214/2.20462 #BTU/lbm
+    
+    W_over_P = 0.7
+    W_over_S = 43.980
+    Range = 3.706*10**(6) #ft
+    LD_ratio = 11.8
+    W_guess = 10000
+    S_ref = 300
+
+    tol = 10**(-6)
+    error = 2*tol
+    W0 = W_guess
+
+    We_prime_frac = A_comparable*W0**C_comparable 
+    We_prime = We_prime_frac*W0
+    W_e = We_prime + 2.5*S_ref + W_engine
+    print('empty weight', W_e)
+
+    def equation(E0_tot):
+        term1 = (n_3 * e_f / g) * LD_ratio * (n_p1 + (n_p2 * phi / (1 - phi)))
+        numerator = W_e + W_payload + (g / e_bat) * E0_tot * (phi + (e_bat / e_f) * (1 - phi))
+        denominator = W_e + W_payload + (g / e_bat) * phi * E0_tot
+        eq = term1 * np.log(numerator / denominator) - Range
+        return eq
+    
+    while tol < error:
+        
+        We_prime_frac = A_comparable*W0**C_comparable 
+        We_prime = We_prime_frac*W0
+        W_e = We_prime + 2.5*S_ref + W_engine
+        #Range = n_3 * e_f/g * (LD_ratio) * (n_p1+n_p2*phi/(1-phi))*np.log((W_e+W_payload+g/e_bat*E0_tot*(phi+e_bat/e_f*(1-phi)))/(W_e+W_payload+g/e_bat*phi*E0_tot))
+
+        # Initial guess for E0_tot
+        E0_tot_guess = 10000 
+
+        # Solve for E0_tot
+        E0_tot = fsolve(equation, E0_tot_guess)    
+
+        W_f = g/e_f *(1-phi)*E0_tot
+        W_battery = g/e_bat * phi*E0_tot
+        W0_new = W_crew +W_payload + W_f + W_battery + W_e
+
+        P = W0_new / W_over_P
+        S = W0_new / W_over_S
+
+        error = abs((W0_new - W0)/W0_new)
+        print('-----------------')
+        #print('equation',test)
+        print('We_prime', We_prime)
+        print('W_e',W_e)
+        print('E0_tot', E0_tot)
+        print('W0', W0_new)
+        print('error', error)
+        time.sleep(.1)
+
+        W0 = W0_new
+
+        if tol > error:
+            print("E0")
+            print(E0_tot)
+            print("TOGW")
+            print(W0)
+            print("Empty Weight:")
+            print(W_e)
+
+
 def WeightEstimation():
-    global W0
-    global W_e
     W_crew = 180 #lbs
     W_payload = 2000 #lbs
     Range = 3.706*10**(6) #ft
@@ -46,40 +171,13 @@ def WeightEstimation():
         W0 = W0_new
 
         if tol > error:
-            W_e = empty_weight_frac*W0
+            We = empty_weight_frac*W0
             print("TOGW")
             print(W0)
             print("Empty Weight:")
-            print(W_e)
-            
-def UpdatedWeight():
-    W_over_P = 0.73
-    W_over_S = 43.980
-    S_ref = 294.79293
-    W_e = 3313.6655867642844
-    P = W_over_P**(-1)*W0
-    S = W_over_S**(-1)*W0
-    print(P)
-    print(S)
-    W_powerplant_ref = P**0.9306 * 10**(-0.1205)
-    W_W_ref = 2.5*S_ref
-    We_prime = W_e - W_powerplant_ref - W_W_ref
-    phi = 0.5
-    g = 32.17
-    n_p1 = 0.80
-    n_p2 = 0
-    W_payload = 2000
-    R = 3.706*10**(6)
-    e_f = 11950 #Wh/kg for Jet A1
-    e_bat = 0.8*250 #Wh/kg need to find source
-    n_3 = 0.8 #same as n_p
-    L_D = 11.8
-    E0_tot, R, n_3, e_f, g, L_D, n_p1, n_p2, phi, W_e, W_payload, e_bat = sp.symbols('E0_tot R n_3 e_f g L_D n_p1 n_p2 phi W_e W_payload e_bat', real=True, positive=True)
-    eq = sp.Eq(R = n_3 * e_f/g * (L_D) * (n_p1+n_p2*phi/(1-phi))*np.log((W_e+W_payload+g/e_bat*E0_tot*(phi+e_bat/e_f*(1-phi)))/(W_e+W_payload+g/e_bat*phi*E0_tot)))
-    solution = sp.solve(eq,E0_tot)
-    print(solution)
+            print(We)
 
 
-AgRegressionData()
-WeightEstimation()
-UpdatedWeight()
+ComparableAircraftWe()
+WeightEstimationUpdated()
+#WeightEstimation()
