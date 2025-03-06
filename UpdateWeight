@@ -1,9 +1,11 @@
 import numpy as np
 import pandas as pd
 import math 
+from math import exp
 from scipy.optimize import fsolve
 import time
 import pdb
+
 ## Regression Data Ag Aircraft
 def AgRegressionData():
     global A, B
@@ -69,41 +71,38 @@ def ComparableAircraftWe():
 
 
 def WeightEstimationUpdated():
-    W_crew = 180 #lbs
-    W_payload = 2000 #lbs
+    W_crew = 180 #lbm
+    W_payload = 2000 #lbm
 
-    W_engine = 500
+    W_engine = 500 #lbm
 
     phi = 0.5
-    g = 32.17
+    g = 32.17 # ft/s^2
     n_p1 = 0.80
     n_p2 = 0
     n_3 = 0.8
 
-    e_f = 43 * 947.817/2.20462 #BTU/lbm
-    e_bat = 0.8 * 500 * 3.41214/2.20462 #BTU/lbm
+    e_f = 43 * 947.817/2.20462 #MJ/kg ->BTU/lbm
+    e_bat = 0.8 * 500 * 3.41214/2.20462 #W-h/kg -> BTU/lbm
     
     W_over_P = 0.7
     W_over_S = 43.980
+
     Range = 3.706*10**(6) #ft
     LD_ratio = 11.8
-    W_guess = 10000
-    S_ref = 300
+    W_guess = 10000 #lb
+    S_ref = 300 # ft^2
 
     tol = 10**(-6)
     error = 2*tol
     W0 = W_guess
 
-    We_prime_frac = A_comparable*W0**C_comparable 
-    We_prime = We_prime_frac*W0
-    W_e = We_prime + 2.5*S_ref + W_engine
-    print('empty weight', W_e)
-
     def equation(E0_tot):
         term1 = (n_3 * e_f / g) * LD_ratio * (n_p1 + (n_p2 * phi / (1 - phi)))
-        numerator = W_e + W_payload + (g / e_bat) * E0_tot * (phi + (e_bat / e_f) * (1 - phi))
-        denominator = W_e + W_payload + (g / e_bat) * phi * E0_tot
+        numerator = W_e + W_payload + (g / e_bat) * E0_tot * (phi + (e_bat / e_f) * (1 - phi)) 
+        denominator = W_e + W_payload + (g / e_bat) * phi * E0_tot 
         eq = term1 * np.log(numerator / denominator) - Range
+        
         return eq
     
     while tol < error:
@@ -111,13 +110,13 @@ def WeightEstimationUpdated():
         We_prime_frac = A_comparable*W0**C_comparable 
         We_prime = We_prime_frac*W0
         W_e = We_prime + 2.5*S_ref + W_engine
+
         #Range = n_3 * e_f/g * (LD_ratio) * (n_p1+n_p2*phi/(1-phi))*np.log((W_e+W_payload+g/e_bat*E0_tot*(phi+e_bat/e_f*(1-phi)))/(W_e+W_payload+g/e_bat*phi*E0_tot))
 
         # Initial guess for E0_tot
-        E0_tot_guess = 10000 
-
+        E0_tot_guess = 5
         # Solve for E0_tot
-        E0_tot = fsolve(equation, E0_tot_guess)    
+        E0_tot = fsolve(equation, E0_tot_guess)  
 
         W_f = g/e_f *(1-phi)*E0_tot
         W_battery = g/e_bat * phi*E0_tot
@@ -139,12 +138,14 @@ def WeightEstimationUpdated():
         W0 = W0_new
 
         if tol > error:
+            print('----Final Values----')
             print("E0")
             print(E0_tot)
             print("TOGW")
             print(W0)
             print("Empty Weight:")
             print(W_e)
+
 
 
 def WeightEstimation():
@@ -177,7 +178,7 @@ def WeightEstimation():
             print("Empty Weight:")
             print(We)
 
-
 ComparableAircraftWe()
 WeightEstimationUpdated()
+#AgRegressionData()
 #WeightEstimation()
