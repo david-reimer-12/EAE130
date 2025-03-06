@@ -1,10 +1,9 @@
 import numpy as np
-import pandas as pd
 import math 
-from math import exp
 from scipy.optimize import fsolve
-import time
-import pdb
+import matplotlib.pyplot as plt
+
+
 
 ## Regression Data Ag Aircraft
 def AgRegressionData():
@@ -85,17 +84,20 @@ def WeightEstimationUpdated():
     e_f = 43 * 947.817/2.20462 #MJ/kg ->BTU/lbm
     e_bat = 0.8 * 500 * 3.41214/2.20462 #W-h/kg -> BTU/lbm
     
-    W_over_P = 0.7
-    W_over_S = 43.980
+    W_over_P = 5
+    W_over_S = 44
 
     Range = 3.706*10**(6) #ft
     LD_ratio = 11.8
     W_guess = 10000 #lb
     S_ref = 300 # ft^2
-
+    S = S_ref
     tol = 10**(-6)
     error = 2*tol
     W0 = W_guess
+
+    P_values = []
+    S_values = []
 
     def equation(E0_tot):
         term1 = (n_3 * e_f / g) * LD_ratio * (n_p1 + (n_p2 * phi / (1 - phi)))
@@ -106,15 +108,17 @@ def WeightEstimationUpdated():
         return eq
     
     while tol < error:
-        
+
+        W_Wing = 2.5*S
+
         We_prime_frac = A_comparable*W0**C_comparable 
         We_prime = We_prime_frac*W0
-        W_e = We_prime + 2.5*S_ref + W_engine
+        W_e = We_prime + W_Wing + W_engine
 
         #Range = n_3 * e_f/g * (LD_ratio) * (n_p1+n_p2*phi/(1-phi))*np.log((W_e+W_payload+g/e_bat*E0_tot*(phi+e_bat/e_f*(1-phi)))/(W_e+W_payload+g/e_bat*phi*E0_tot))
 
         # Initial guess for E0_tot
-        E0_tot_guess = 5
+        E0_tot_guess = 3
         # Solve for E0_tot
         E0_tot = fsolve(equation, E0_tot_guess)  
 
@@ -133,9 +137,10 @@ def WeightEstimationUpdated():
         print('E0_tot', E0_tot)
         print('W0', W0_new)
         print('error', error)
-        time.sleep(.1)
 
         W0 = W0_new
+        P_values.append(P)
+        S_values.append(S)
 
         if tol > error:
             print('----Final Values----')
@@ -145,6 +150,20 @@ def WeightEstimationUpdated():
             print(W0)
             print("Empty Weight:")
             print(W_e)
+            print("Power")
+            print(P)
+            print('Wing Area')
+            print(S)
+        
+
+        # Plot P vs. S
+    plt.figure(figsize=(8, 6))
+    plt.plot(S_values, P_values, marker='o', linestyle='-', color='b')
+    plt.xlabel('Wing Area (S) [ft²]')
+    plt.ylabel('Power (P) [hp]')
+    plt.title('Power vs. Wing Area')
+    plt.grid()
+    plt.show()
 
 
 
