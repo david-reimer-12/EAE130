@@ -40,24 +40,28 @@ def ComparableAircraftWe():
     W_pwr_AT = 331
     W_e_prime_AT = W_e_AT - 2.5*S_AT - W_pwr_AT
     W0_AT = 10480
+    P_AT = 750
     #Ag Cat
     W_e_Ag = 3335
     S_Ag = 328
     W_pwr_Ag = 505
     W_e_prime_Ag = W_e_Ag - 2.5*S_Ag - W_pwr_Ag
     W0_Ag = 4500
+    P_AgCat = 450
     #Thrush 
     W_e_Th = 4800
     S_Th = 365
     W_pwr_Th = 390
     W_e_prime_Th = W_e_Th - 2.5*S_Th - W_pwr_Th
     W0_Th = 10500
+    P_Thrush = 800
     #AT-802
     W_e_AT802 = 6751
     S_AT802 = 401
     W_pwr_AT802 = 486
     W_e_prime_AT802 = W_e_AT802 - 2.5*S_AT802 - W_pwr_AT802
     W0_AT802 = 16000
+    P_AT802 = 1350
 
     W0 = np.array([W0_AT, W0_Ag, W0_Th, W0_AT802])
     W_e_prime = np.array([W_e_prime_AT, W_e_prime_Ag, W_e_prime_Th, W_e_prime_AT802])
@@ -68,29 +72,34 @@ def ComparableAircraftWe():
     A_comparable = np.exp(D)
     print(C_comparable)
 
+    global P_comparable, S_comparable
+    P_comparable = [P_AT, P_AgCat, P_Thrush, P_AT802]
+    S_comparable = [S_AT, S_Ag, S_Th, S_AT802]
+
 
 def WeightEstimationUpdated():
+    global W0, S
     W_crew = 180 #lbm
     W_payload = 2000 #lbm
 
     W_engine = 500 #lbm
 
-    phi = 0.5
+    phi = 0.3
     g = 32.17 # ft/s^2
     n_p1 = 0.80
     n_p2 = 0
     n_3 = 0.8
 
-    e_f = 43 * 947.817/2.20462 #MJ/kg ->BTU/lbm
+    e_f =  11940 * 3.41214/2.20462 #W-h/kg ->BTU/lbm
     e_bat = 0.8 * 500 * 3.41214/2.20462 #W-h/kg -> BTU/lbm
     
     W_over_P = 5
     W_over_S = 44
 
-    Range = 3.706*10**(6) #ft
+    Range = 3.706*10**(6) #ft 1129588
     LD_ratio = 11.8
     W_guess = 10000 #lb
-    S_ref = 300 # ft^2
+    S_ref =  300 # ft^2    #27.8
     S = S_ref
     tol = 10**(-6)
     error = 2*tol
@@ -109,7 +118,7 @@ def WeightEstimationUpdated():
     
     while tol < error:
 
-        W_Wing = 2.5*S
+        W_Wing = 2.5*S #2.5
 
         We_prime_frac = A_comparable*W0**C_comparable 
         We_prime = We_prime_frac*W0
@@ -118,7 +127,7 @@ def WeightEstimationUpdated():
         #Range = n_3 * e_f/g * (LD_ratio) * (n_p1+n_p2*phi/(1-phi))*np.log((W_e+W_payload+g/e_bat*E0_tot*(phi+e_bat/e_f*(1-phi)))/(W_e+W_payload+g/e_bat*phi*E0_tot))
 
         # Initial guess for E0_tot
-        E0_tot_guess = 3
+        E0_tot_guess = 5
         # Solve for E0_tot
         E0_tot = fsolve(equation, E0_tot_guess)  
 
@@ -154,9 +163,13 @@ def WeightEstimationUpdated():
             print(P)
             print('Wing Area')
             print(S)
+            print('battery weight')
+            print(W_battery)
+            print('fuel weight')
+            print(W_f)
         
 
-        # Plot P vs. S
+    #     #Plot P vs. S
     plt.figure(figsize=(8, 6))
     plt.plot(S_values, P_values, marker='o', linestyle='-', color='b')
     plt.xlabel('Wing Area (S) [ft²]')
@@ -164,8 +177,54 @@ def WeightEstimationUpdated():
     plt.title('Power vs. Wing Area')
     plt.grid()
     plt.show()
+    
+        # Plot P vs. S Comparable
+    coeffs = np.polyfit(S_comparable, P_comparable, 1)
+    S_range = np.linspace(100, 600, 100)
+    P_trend = coeffs[0] * S_range + coeffs[1]
+
+    # Plot P vs. S
+    plt.figure(figsize=(8, 6))
+    plt.plot(S_values, P_values, marker='o', linestyle='-', color='b', label='Estimated Aircraft')
+    plt.scatter(S_comparable, P_comparable, marker='s', color='r', label='Comparable Aircraft')
+    plt.plot(S_range, P_trend, linestyle='--', color='g', label='Comparable Trend Line')
+    plt.xlabel('Wing Area (S) [ft²]')
+    plt.ylabel('Power (P) [hp]')
+    plt.title('Power vs. Wing Area')
+    plt.xlim(100, 600)
+    plt.ylim(0, 2000)
+    plt.legend()
+    plt.grid()
+    plt.show()
 
 
+
+
+
+
+
+
+
+def WingEstimation():
+    rho = 23.77E-4 #slug/ft3
+    V_stall = 168.71
+    V_Cruise = 290.3
+    AR = 8
+    b = (AR*S)**0.5
+    taper_ratio = 1
+    c_root = 2*S/(b*(1+taper_ratio))
+    MAC = 2/3 * (1+taper_ratio+taper_ratio**2)/(1+taper_ratio) * c_root
+    Spanwise_Location = b/6*(1+2*taper_ratio)/(1+taper_ratio)
+    C_L_Cruise = 2*W0/(rho*S*V_Cruise**2)
+    C_L_Stall =  2*W0/(rho*S*V_stall**2)
+    print('Span')
+    print(b)
+    print('Chord Length')
+    print(c_root)
+    print("CL Cruise")
+    print(C_L_Cruise)
+    print("CL Stall")
+    print(C_L_Stall)
 
 def WeightEstimation():
     W_crew = 180 #lbs
@@ -199,5 +258,6 @@ def WeightEstimation():
 
 ComparableAircraftWe()
 WeightEstimationUpdated()
+WingEstimation()
 #AgRegressionData()
 #WeightEstimation()
