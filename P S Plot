@@ -1,0 +1,457 @@
+import numpy as np
+import math 
+from scipy.optimize import fsolve
+import matplotlib.pyplot as plt
+import os
+import pandas as pd
+
+#Data from the OpenVSP file:
+b = 47              #[ft]
+chord = 5.8     #[ft]
+S_ref = 191      #[ft^2]
+AR = 8
+
+def ZeroLiftDrag():
+    c = 1.0447      #Ag aircraft constant (Roskam)
+    d = 0.5326      #Ag aircraft constant (Roskam)
+    W_TO = 8413     #Take off weight [lbs]
+    S_wet = (10**c) * (W_TO**d)     #Wetted surface area [ft^2]
+
+    C_f = 0.0055    #Estimated skin friction coefficient (Raymer)
+    a = -2.2218     #Constant based on C_f (Roskam)
+    b = 1.00        #Constant based on C_f (Roskam)
+
+    f = 10**(a + b*(np.log10(S_wet)))       #logarithmic equation for equivalent parasite area (Roskam)
+
+    #Here we will add in additional zero lift drag paramater like canapy and control surface gaps:
+    C_d_0_CS = 0.0005       #Additional drag coefficient value for control surface gaps
+    C_d_0_C = 0.0004        #Additional drag coefficient value for Canopy design
+    C_d_0_A = 0.0008        #Additional drag coefficient value for GPS antenna
+
+    C_d_0 = (f / S_ref) + C_d_0_CS + C_d_0_C + C_d_0_A
+    return C_d_0
+
+C_d_0 = ZeroLiftDrag()
+print("Zero-Lift Drag Coefficient (C_d_0):", C_d_0)
+
+
+
+def Configuration_Values(configuration):
+    drag_LG = 0.015
+    drag_Flaps_TO = 0.01
+    drag_Flaps_L = 0.060
+    e_clean = 0.825
+    e_LG = e_clean
+    e_Flaps_TO = 0.775
+    e_Flaps_L = 0.725
+
+    if configuration == 1:
+        del_C_d_0 = drag_LG
+        e = e_LG
+    elif configuration == 2:
+        del_C_d_0 = drag_LG + drag_Flaps_TO
+        e = e_Flaps_TO
+    elif configuration == 3:
+        del_C_d_0 = drag_LG + drag_Flaps_L
+        e = e_Flaps_L
+    else:
+        return "Configuration input is not possible"
+    return del_C_d_0, e
+
+#Create an array of values for C_L:
+C_L = np.linspace(-2,2,100)
+
+del_C_d_0_1, e_1 = Configuration_Values(1)
+del_C_d_0_2, e_2 = Configuration_Values(2)
+del_C_d_0_3, e_3 = Configuration_Values(3)
+
+C_D_1 = (C_d_0 + del_C_d_0_1) + ((C_L**2) / (np.pi * e_1 * AR))
+C_D_2 = (C_d_0 + del_C_d_0_2) + ((C_L**2) / (np.pi * e_2 * AR))
+C_D_3 = (C_d_0 + del_C_d_0_3) + ((C_L**2) / (np.pi * e_3 * AR))
+
+
+plt.figure(figsize=(10,6))
+plt.title('Drag Polars for 3 Aircraft Configurations')
+plt.xlabel("$C_D$")      
+plt.ylabel("$C_L$")
+line = 3      #creates a larger linewidth
+plt.plot(C_D_1, C_L, color='blue', linewidth=line, label='Configuration #1: Static LG')
+plt.plot(C_D_2, C_L, color='red', linewidth=line, label='Configuration #2: Static LG, Takeoff Flaps')
+plt.plot(C_D_3, C_L, color='green', linewidth=line, label='Configuration #3: Static LG, Landing Flaps')
+plt.legend(loc='best', fontsize='10', framealpha=1)
+plt.show()
+
+
+#Defining all the variables:
+rho = 23.77E-4 #slug/ft3
+V_stall = 168.71   #ft/s
+C_L_max = 1.4
+C_L_max_TO = 1.4
+C_L_max_L = 1.5
+rho_SL = 1.019E-3       #slug/ft3
+N_engine = 1
+W_takeoff = 8413        #lbs
+W_TO = W_takeoff        #[lbs]
+C_D_0 = C_d_0
+V = 290.3     #ft/s
+q = (0.5) * rho * V ** 2
+W_L =  W_TO#[lbf]
+e = e_1
+n =  1/np.cos(45*(np.pi/180))      #Load Factor
+n_p = 0.8
+G_TO = 0.083
+G_ER = 0.04
+G_BALK = 0.03
+W_cruise = W_TO
+W = W_TO
+S_a = 600   #[ft]
+k_s_TO_climb = 1.2
+k_s_ER_climb = 1.3
+k_s_BALK = 1.3
+V_crz = V
+k= 1/(np.pi*e_1*AR)
+P_ratio = 1.33
+
+# Solving for TOP23
+a = 0.0149
+b = 8.134
+c = -1500
+coefficients = [a,b,c]
+roots = np.roots(coefficients)
+TOP_23 = max(roots)
+
+## Regression Data Ag Aircraft
+def AgRegressionData():
+    global A, B
+    W0 = [3417,2866,6614,9259,4244,10000,7020,3500,3300,3900,6173,6100,10000,6000,6000,6000,12675]
+    We = [2229,1880,3550,5445,2242,4990,3525,2306,2229,2050,3660,2995,4500,3900,3550,3600,7120]
+    log_W0 = np.log10(W0)
+    log_We = np.log10(We)
+    B, A = np.polyfit(log_We, log_W0,1)
+
+## Regression Data Twin Engine Aircraft
+def TwinRegressionData():
+    global A, B
+    W0 = [3900, 5100, 6775, 9630, 5150, 5990,6850,6750,7450,8200,6500,7000,5500,3800,3800,8700,3050,2183,9480,10325,7350,2900]
+    We = [2466,3236,4423,5765,3305,3948,4077,4368,4668,4915,4003,4221,3737,2354,2430,4910,2100,1322,5732,6629,4100,1610]
+    log_W0 = np.log10(W0)
+    log_We = np.log10(We)
+    B, A = np.polyfit(log_We, log_W0,1)
+
+def WePrime():
+    global A, B
+    W0 = [3417,2866,6614,9259,4244,10000,7020,3500,3300,3900,6173,6100,10000,6000,6000,6000,12675]
+    We = [2229,1880,3550,5445,2242,4990,3525,2306,2229,2050,3660,2995,4500,3900,3550,3600,7120]
+    log_W0 = np.log10(W0)
+    log_We = np.log10(We)
+    B, A = np.polyfit(log_We, log_W0,1)
+
+def ComparableAircraftWe():
+    global C_comparable, A_comparable
+    #Comparable Aircraft W_e'
+    #AT-502
+    W_e_AT = 4650
+    S_AT = 312
+    W_pwr_AT = 331
+    W_e_prime_AT = W_e_AT - 2.5*S_AT - W_pwr_AT
+    W0_AT = 10480
+    P_AT = 750
+    #Ag Cat
+    W_e_Ag = 3335
+    S_Ag = 328
+    W_pwr_Ag = 505
+    W_e_prime_Ag = W_e_Ag - 2.5*S_Ag - W_pwr_Ag
+    W0_Ag = 4500
+    P_AgCat = 450
+    #Thrush 
+    W_e_Th = 4800
+    S_Th = 365
+    W_pwr_Th = 390
+    W_e_prime_Th = W_e_Th - 2.5*S_Th - W_pwr_Th
+    W0_Th = 10500
+    P_Thrush = 800
+    #AT-802
+    W_e_AT802 = 6751
+    S_AT802 = 401
+    W_pwr_AT802 = 486
+    W_e_prime_AT802 = W_e_AT802 - 2.5*S_AT802 - W_pwr_AT802
+    W0_AT802 = 16000
+    P_AT802 = 1350
+
+    W0 = np.array([W0_AT, W0_Ag, W0_Th, W0_AT802])
+    W_e_prime = np.array([W_e_prime_AT, W_e_prime_Ag, W_e_prime_Th, W_e_prime_AT802])
+    x = np.log(W0)
+    y = np.log(W_e_prime/W0)
+
+    C_comparable, D = np.polyfit(x,y,1)
+    A_comparable = np.exp(D)
+    print(C_comparable)
+
+    global P_comparable, S_comparable
+    P_comparable = [P_AT, P_AgCat, P_Thrush, P_AT802]
+    S_comparable = [S_AT, S_Ag, S_Th, S_AT802]
+
+
+def WeightEstimationUpdated():
+    global W0, S
+    W_crew = 180 #lbm
+    W_payload = 2000 #lbm
+
+    W_engine = 500 #lbm
+
+    phi = 0.3
+    g = 32.17 # ft/s^2
+    n_p1 = 0.80
+    n_p2 = 0
+    n_3 = 0.8
+
+    e_f =  11940 * 3.41214/2.20462 #W-h/kg ->BTU/lbm
+    e_bat = 0.8 * 500 * 3.41214/2.20462 #W-h/kg -> BTU/lbm
+    
+    W_over_P = 5
+    W_over_S = 44
+
+    Range = 3.706*10**(6) #ft 1129588
+    LD_ratio = 11.8
+    W_guess = 10000 #lb
+    S_ref =  300 # ft^2    #27.8
+    S = S_ref
+    tol = 10**(-6)
+    error = 2*tol
+    W0 = W_guess
+
+    P_values = []
+    S_values = []
+
+    def equation(E0_tot):
+        term1 = (n_3 * e_f / g) * LD_ratio * (n_p1 + (n_p2 * phi / (1 - phi)))
+        numerator = W_e + W_payload + (g / e_bat) * E0_tot * (phi + (e_bat / e_f) * (1 - phi)) 
+        denominator = W_e + W_payload + (g / e_bat) * phi * E0_tot 
+        eq = term1 * np.log(numerator / denominator) - Range
+        
+        return eq
+    
+    while tol < error:
+
+        W_Wing = 2.5*S #2.5
+
+        We_prime_frac = A_comparable*W0**C_comparable 
+        We_prime = We_prime_frac*W0
+        W_e = We_prime + W_Wing + W_engine
+
+        #Range = n_3 * e_f/g * (LD_ratio) * (n_p1+n_p2*phi/(1-phi))*np.log((W_e+W_payload+g/e_bat*E0_tot*(phi+e_bat/e_f*(1-phi)))/(W_e+W_payload+g/e_bat*phi*E0_tot))
+
+        # Initial guess for E0_tot
+        E0_tot_guess = 5
+        # Solve for E0_tot
+        E0_tot = fsolve(equation, E0_tot_guess)  
+
+        W_f = g/e_f *(1-phi)*E0_tot
+        W_battery = g/e_bat * phi*E0_tot
+        W0_new = W_crew +W_payload + W_f + W_battery + W_e
+
+        P = W0_new / W_over_P
+        S = W0_new / W_over_S
+
+        error = abs((W0_new - W0)/W0_new)
+        print('-----------------')
+        #print('equation',test)
+        print('We_prime', We_prime)
+        print('W_e',W_e)
+        print('E0_tot', E0_tot)
+        print('W0', W0_new)
+        print('error', error)
+
+        W0 = W0_new
+        P_values.append(P)
+        S_values.append(S)
+
+        if tol > error:
+            print('----Final Values----')
+            print("E0")
+            print(E0_tot)
+            print("TOGW")
+            print(W0)
+            print("Empty Weight:")
+            print(W_e)
+            print("Power")
+            print(P)
+            print('Wing Area')
+            print(S)
+            print('battery weight')
+            print(W_battery)
+            print('fuel weight')
+            print(W_f)
+        
+
+    #     #Plot P vs. S
+    plt.figure(figsize=(8, 6))
+    plt.plot(S_values, P_values, marker='o', linestyle='-', color='b')
+    plt.xlabel('Wing Area (S) [ft²]')
+    plt.ylabel('Power (P) [hp]')
+    plt.title('Power vs. Wing Area')
+    plt.grid()
+    plt.show()
+    
+        # Plot P vs. S Comparable
+    coeffs = np.polyfit(S_comparable, P_comparable, 1)
+    S_range = np.linspace(100, 600, 100)
+    P_trend = coeffs[0] * S_range + coeffs[1]
+
+    W0_final = 8413.8
+    #Takeoff Constraint:
+    P_over_W_TO = ((W0_final/S_range) / (TOP_23 * (rho/rho_SL) * C_L_max))
+    P_TO = (P_over_W_TO)*W0_final
+
+    # Landing Constraint (redefined as a function of S_range)
+    W_over_S_Landing = (80 * ((W0_final/S_range) / ((rho/rho_SL)*C_L_max_L))) + S_a
+    P_Landing = (W_over_S_Landing) * W0_final  # Convert to power
+    P_range = np.linspace(0,2500,100)
+
+    #Stall Constraint:
+    W_stall = (1/2) * rho * (V_stall**2) * C_L_max * S_range
+    S_Stall = (W_stall)**-1*S_range * W0_final
+
+    #Climb Constraint(no climb corrections included due to immediate landing):
+    V_climb = k_s_TO_climb * V_stall
+    C_L_max_CL = (2*W0_final) / (rho *(V_climb /k_s_TO_climb)**2)
+    C_L_climb = C_L_max_CL / (k_s_TO_climb**2)
+    V_climb = np.sqrt((2/(rho*C_L_max_CL)) * (W0_final/S_range))
+
+    #TO Climb:
+    T_over_W_TOclimb = (((k_s_TO_climb)**2 * C_D_0)/C_L_max_CL) + ((1/(np.pi*e_2*AR)) * ((C_L_max_CL/(k_s_TO_climb**2)))) + G_TO
+    P_over_W_TOclimb = T_over_W_TOclimb / ((550*n_p)/V_climb)
+    P_TOclimb = P_over_W_TOclimb*W0_final
+
+    #En Route Climb:
+    T_over_W_ERclimb = (((k_s_ER_climb)**2 * C_D_0)/C_L_max_CL) + ((1/(np.pi*e_1*AR)) * ((C_L_max_CL/(k_s_ER_climb**2)))) + G_ER
+    P_over_W_ERclimb = T_over_W_ERclimb / ((550*n_p)/V_climb)
+    P_ERclimb = (P_over_W_ERclimb)*W0_final
+
+    #Balked Climb:
+    T_over_W_BALKclimb = (((k_s_BALK)**2 * C_D_0)/C_L_max_CL) + ((1/(np.pi*e_1*AR)) * ((C_L_max_CL/(k_s_ER_climb**2)))) + G_BALK
+    P_over_W_BALKclimb = T_over_W_BALKclimb / ((550*n_p)/V_climb)
+    P_BALKclimb = (P_over_W_BALKclimb)*W0_final
+
+    #Cruise Constraint:
+    q_crz = 0.5 * rho * (V_crz**2)
+    T_over_W_crz = (((q_crz*C_D_0) / (W0_final/S_range)) + (k/q_crz)*(W0_final/S_range))
+    P_over_W_crz = T_over_W_crz / ((550*n_p)/V_crz)
+    P_crz = P_over_W_crz*W0_final
+
+    #Absolute Ceiling Constraint:
+    T_over_W_Cieling_abs = 2*np.sqrt(k*C_D_0)
+    P_over_W_Cieling_abs = T_over_W_Cieling_abs / ((550*n_p)/np.sqrt((2/(rho*C_L_max))*(W0_final/S_range)))
+    P_cieling_abs = P_over_W_Cieling_abs * W0_final
+
+#Maneuver Constraint: **STILL NEED TO COMPUTE THE LOAD FACTOR AND MANEUVER STALL SPEED**
+    T_over_W_maneuver = ((q_crz*C_D_0)/(W0_final/S_range)) + (k*(n**2 / q)*(W0_final/S_range))
+    P_over_w_maneuver = T_over_W_maneuver / ((550*n_p)/np.sqrt((2/(rho*C_L_max))*(W0_final/S_range)))
+    P_maneuver = P_over_w_maneuver*W0_final
+
+
+
+
+    # Plot P vs. S
+    plt.figure(figsize=(8, 6))
+    plt.scatter(180, 1721, marker='o', color='b', s=80, label='Design Point')
+    plt.plot(S_range, P_TO, color='cyan', linewidth=line, label='Takeoff')
+    plt.plot(S_range, P_Landing, color='green', linewidth=line, label='Landing')
+    plt.plot(S_Stall, P_range, color='red', linewidth=line, label='Stall')
+    plt.plot(S_range, P_ERclimb, color='pink', linewidth=line, label='ER Climb')
+    plt.plot(S_range, P_BALKclimb, color='brown', linewidth=line, label='Balk Climb')
+    plt.plot(S_range, P_crz, color='orange', linewidth=line, label='Cruise')
+    plt.plot(S_range, P_cieling_abs, color='olive', linewidth=line, label='Cieling')
+    plt.plot(S_range, P_maneuver, color='lime', linewidth=line, label='Maneuver')
+    # Shade the area above balked climb, to the right of landing, and to the left of cruise
+    plt.fill_between(
+        S_range,  # X-values (wing area)
+        P_crz,  
+        2500,  # Upper boundary (top of the plot)
+        where=(S_range > 380),  # Condition: x > 379
+        color='gray', alpha=0.3, label='Feasability Region'
+    )
+    plt.fill_between(
+        S_range,  # X-values (wing area)
+        P_BALKclimb,  
+        2500,  # Upper boundary (top of the plot)
+        where=(S_range > 175) & (S_range < 385),
+        color='gray', alpha=0.3, 
+    )
+    plt.xlabel('Wing Area (S) [ft²]')
+    plt.ylabel('Power (P) [hp]')
+    plt.title('Power vs. Wing Area')
+    plt.xlim(100, 600)
+    plt.ylim(0, 2500)
+    plt.legend(
+        fontsize='small',  # Smaller font size
+        loc='lower right',  # Move legend to bottom right
+        bbox_to_anchor=(1.0, 0.0)  # Fine-tune position (optional)
+    )
+    plt.grid()
+    plt.show()
+
+
+
+
+
+
+
+
+
+def WingEstimation():
+    rho = 23.77E-4 #slug/ft3
+    V_stall = 168.71
+    V_Cruise = 290.3
+    AR = 8
+    b = (AR*S)**0.5
+    taper_ratio = 1
+    c_root = 2*S/(b*(1+taper_ratio))
+    MAC = 2/3 * (1+taper_ratio+taper_ratio**2)/(1+taper_ratio) * c_root
+    Spanwise_Location = b/6*(1+2*taper_ratio)/(1+taper_ratio)
+    C_L_Cruise = 2*W0/(rho*S*V_Cruise**2)
+    C_L_Stall =  2*W0/(rho*S*V_stall**2)
+    print('Span')
+    print(b)
+    print('Chord Length')
+    print(c_root)
+    print("CL Cruise")
+    print(C_L_Cruise)
+    print("CL Stall")
+    print(C_L_Stall)
+
+def WeightEstimation():
+    W_crew = 180 #lbs
+    W_payload = 2000 #lbs
+    Range = 3.706*10**(6) #ft
+    Endurance = 28800 #seconds
+    V_inf = 290.303 #ft/s
+    SFC = 7.06*10**(-9) #1/ft
+    prop_eff = 0.8
+    LD_ratio = 11.8
+    W_guess = 5000
+    cruise = math.exp(-(Range*SFC)/(prop_eff*LD_ratio))
+    loiter = math.exp((-Endurance*V_inf*SFC)/(prop_eff*LD_ratio))
+    fuel_weight_ratio = 1 - 0.996*0.995*0.996*0.998*0.999*0.998*cruise*loiter
+    tol = 10**(-6)
+    error = 2*tol
+    W0 = W_guess
+
+    while tol < error:
+        empty_weight_frac = 10**(-A/B) * W0 **(1/B-1)
+        W0_new = (W_crew + W_payload)/(1-1.06*fuel_weight_ratio-empty_weight_frac) + 400
+        error = abs((W0_new - W0)/W0_new)
+        W0 = W0_new
+
+        if tol > error:
+            We = empty_weight_frac*W0
+            print("TOGW")
+            print(W0)
+            print("Empty Weight:")
+            print(We)
+
+ComparableAircraftWe()
+WeightEstimationUpdated()
+WingEstimation()
+#AgRegressionData()
+#WeightEstimation()
