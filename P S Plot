@@ -359,6 +359,7 @@ def WeightEstimationUpdated():
     plt.plot(S_range, P_Landing, color='green', linewidth=line, label='Landing')
     plt.plot(S_Stall, P_range, color='red', linewidth=line, label='Stall')
     plt.plot(S_range, P_ERclimb, color='pink', linewidth=line, label='ER Climb')
+    plt.plot(S_range, P_TOclimb, color='black', linewidth=line, label='TO Climb')
     plt.plot(S_range, P_BALKclimb, color='brown', linewidth=line, label='Balk Climb')
     plt.plot(S_range, P_crz, color='orange', linewidth=line, label='Cruise')
     plt.plot(S_range, P_cieling_abs, color='olive', linewidth=line, label='Cieling')
