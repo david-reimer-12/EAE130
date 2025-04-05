@@ -1,0 +1,4 @@
+startup_taxi = 1 - (0.25*(SFC/prop_eff)*((1366*0.05)/W0_new))
+takeoff = 1 - (1/60)*SFC*(((prop_eff*1366)/V_inf)/W0_new)
+print('The takeoff fuel weight ratio is {}'.format(takeoff)) 
+print('The startup fuel weight ratio is {}'.format(startup_taxi))
