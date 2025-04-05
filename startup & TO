@@ -1,4 +1,123 @@
-startup_taxi = 1 - (0.25*(SFC/prop_eff)*((1366*0.05)/W0_new))
-takeoff = 1 - (1/60)*SFC*(((prop_eff*1366)/V_inf)/W0_new)
-print('The takeoff fuel weight ratio is {}'.format(takeoff)) 
-print('The startup fuel weight ratio is {}'.format(startup_taxi))
+import numpy as np
+import math 
+from scipy.optimize import fsolve
+import matplotlib.pyplot as plt
+import os
+import pandas as pd
+def AgRegressionData():
+    global A, B
+    W0 = [3417,2866,6614,9259,4244,10000,7020,3500,3300,3900,6173,6100,10000,6000,6000,6000,12675]
+    We = [2229,1880,3550,5445,2242,4990,3525,2306,2229,2050,3660,2995,4500,3900,3550,3600,7120]
+    log_W0 = np.log10(W0)
+    log_We = np.log10(We)
+    B, A = np.polyfit(log_We, log_W0,1)
+
+def WeightEstimation():
+    W_crew = 180 #lbs
+    W_payload = 2000 #lbs
+    Range = 3.706*10**(6) #ft
+    Endurance = 28800 #seconds
+    V_inf = 290.303 #ft/s
+    SFC = 7.06*10**(-9) #1/ft
+    prop_eff = 0.8
+    LD_ratio = 11.8
+    W_guess = 9040
+
+
+    tol = 10**(-6)
+    error = 2*tol
+    W0 = W_guess
+
+    while tol < error:
+        empty_weight_frac = 10**(-A/B) * W0 **(1/B-1)
+
+        cruise = math.exp(-(Range*SFC)/(prop_eff*LD_ratio))
+        startwarmtaxi = 1 - (15*60*(SFC/prop_eff)*((1366*550*32.174)/W0))
+        takeoff = 1 - (60)*SFC*(((prop_eff*1366*550*32.174)/V_inf)/W0)
+        loiter = math.exp((-Endurance*V_inf*SFC)/(prop_eff*LD_ratio))
+        fuel_weight_ratio = 1 - startwarmtaxi*takeoff*0.998*0.999*0.998*cruise*loiter
+
+        W0_new = (W_crew + W_payload)/(1-1.06*fuel_weight_ratio-empty_weight_frac) + 400
+        error = abs((W0_new - W0)/W0_new)
+        W0 = W0_new
+
+        if tol > error:
+            We = empty_weight_frac*W0
+            print("TOGW")
+            print(W0)
+            print("Empty Weight:")
+            print(We)
+            print(startwarmtaxi)
+            print(takeoff)
+            
+
+import numpy as np
+
+def ZeroLiftDrag():
+    W_TO = 9040
+    S_ref = 446
+    global C_d_0
+    c = 1.0447      #Ag aircraft constant (Roskam)
+    d = 0.5326      #Ag aircraft constant (Roskam)
+    S_wet = (10**c) * (W_TO**d)     #Wetted surface area [ft^2]
+
+    C_f = 0.0055    #Estimated skin friction coefficient (Raymer)
+    a = -2.2218     #Constant based on C_f (Roskam)
+    b = 1.00        #Constant based on C_f (Roskam)
+
+    f = 10**(a + b*(np.log10(S_wet)))       #logarithmic equation for equivalent parasite area (Roskam)
+
+    #Here we will add in additional zero lift drag paramater like canapy and control surface gaps:
+    C_d_0_CS = 0.0005       #Additional drag coefficient value for control surface gaps
+    C_d_0_C = 0.0004        #Additional drag coefficient value for Canopy design
+    C_d_0_A = 0.0008        #Additional drag coefficient value for GPS antenna
+    C_d_0 = (f / S_ref) + C_d_0_CS + C_d_0_C + C_d_0_A
+    print("Zero-Lift Drag Coefficient (C_d_0):", C_d_0)
+
+def CruiseEstimation():
+    W_crew = 180  # lbs
+    W_payload = 2000  # lbs
+    Range = 3.706e6  # ft
+    Endurance = 28800  # seconds
+    V_inf = 290.303  # ft/s
+    SFC = 7.06*10**(-9) #1/ft
+    prop_eff = 0.8
+    W_guess = 9050
+    S = 446         # wing area in ft^2
+
+    rho = 23.77e-4  # slug/ft^3
+
+    # Takeoff
+    W_end_takeoff = 9040 
+
+    # Cruise
+    c_t = SFC / prop_eff
+    intervals = 8
+    delta_R = Range / intervals
+    k = 0.045         # CHECK
+
+    C_L_breguet = np.zeros(intervals)
+    W_matrix = np.zeros(intervals)
+    L_over_D = np.zeros(intervals)
+
+    V = V_inf
+    W_matrix[0] = W_end_takeoff
+
+    C_L_breguet[0] = (2 * W_matrix[0]) / (rho * V**2 * S)
+    L_over_D[0] = C_L_breguet[0] / (C_d_0 + k * C_L_breguet[0]**2)
+
+    for i in range(1, intervals):
+        C_L_breguet[i] = (2 * W_matrix[i-1]) / (rho * V**2 * S)
+        L_over_D[i] = C_L_breguet[i] / (C_d_0 + k * C_L_breguet[i]**2)
+        W_matrix[i] = W_matrix[i-1] * np.exp(- (delta_R * c_t) / (V * L_over_D[i-1]))
+
+    end_cruise_weight = W_matrix[-1]
+    end_cruise_fuelfrac = W_matrix[-1]/W_matrix[-2]
+    print(f"cruise end weight is {end_cruise_weight:.2f} lbs")
+    print(end_cruise_fuelfrac)
+
+ZeroLiftDrag()
+CruiseEstimation()
+
+AgRegressionData()
+WeightEstimation()
