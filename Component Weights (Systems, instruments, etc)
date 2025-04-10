@@ -1,0 +1,67 @@
+# Variables
+Vt = 255     # Total volume of fuel in gallons (1707 lbs / 6.7)
+Vi = 0.95 * Vt  # Integral tanks volume in gallons
+Nt = 2       # Number of fuel tanks
+Vp = 0       # Self-sealing tanks volume in gallons
+Kfc = 0.64   # For airplanes with powered flight controls
+W0 = 9050    # Takeoff weight
+WAPU = 84    # Uninstalled APU weight (Honeywell RE100 Auxiliary Power Unit)
+Kp = 1.4     # For engine with propeller
+Ktp = 0.793  # For a turboprop
+Nc = 1       # Number of crew
+lf = 32      # Fuselage length
+Bw = 60      # Wing span
+Nf = 1       # Number of hydraulic systems
+Rkva = 50    # Electrical system rating in kVA (UNSURE)
+La = 30      # Electrical routing distance (ft)
+Ngen = 2     # Number of generators
+Wuav = 50    # Uninstalled avionics weight
+Wf = 1707    # Fuel weight
+Npers = 1    # Number of crew and passengers
+Vpr = 180    # Volume of pressurized section in ft³
+N = 1        # Number of engines
+Lec = 5.224  # Routing distance from engine front to cockpit (ft)
+
+#### Calculations ####
+
+#### Control Systems (Linkages, Actuators, Wires,)
+# Flight controls weight equation
+Wfc = Kfc * W0**(2/3) * 1.2
+
+# Engine controls weight equation
+WeCon = 5.0 * N + 0.80 * Lec
+
+
+#### Instruments and Avionics
+# Instruments weight equation
+Winst = 4.509 * Kp * Ktp * Nc**0.541 * Nc * (lf + Bw)**0.5
+
+#Avionics weight equation
+Wavio = 1.73 * Wuav**0.983
+
+
+#### Fuel and Oil System (Tubes, Fuel Tank)
+# Fuel system weight equation
+Wfs = 2.405 * Vt**0.606 * (1 + Vi/Vt)**-1.0 * (1 + Vp/Vt) * Nt**0.5
+
+
+#### Other (Hydraulic, Pneumatic, Electrical Systems)
+# Hydraulics weight equation
+Whyd = 0.2673 * Nf * (lf + Bw)**0.937
+
+# De-Icing
+WdIce =0.002* Wdg
+
+# Electrical System 
+Wele = 7.291 * Rkva**0.782 * La**0.346 * Ngen**0.10
+
+
+#### Print Results ####
+print(f"Flight Controls Weight (Wfc): {Wfc:.2f} lbs")
+print(f"Engine Controls Weight (WeCon): {WeCon:.2f} lbs")
+print(f"Instruments Weight (Winst): {Winst:.2f} lbs")
+print(f"Avionics Weight (Wavio): {Wavio:.2f} lbs")
+print(f"Fuel System Weight (Wfs): {Wfs:.2f} lbs")
+print(f"Hydraulics Weight (Whyd): {Whyd:.2f} lbs")
+print(f"De-Icing System Weight (WdIce): {WdIce:.2f} lbs")
+print(f"Electrical System Weight (Wele): {Wele:.2f} lbs")
