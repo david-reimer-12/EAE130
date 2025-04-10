@@ -1,0 +1,37 @@
+import numpy as np
+import math 
+from scipy.optimize import fsolve
+import matplotlib.pyplot as plt
+import os
+import pandas as pd
+
+x_cg_forward = 9.83 #[ft]
+x_cg_mid = 10.83 #[ft]
+x_cg_back = 11.27 #[ft]
+z_cg = 5.58 #[ft]
+x_LG_main = 8.47 #[ft]
+x_LG_tail = x_LG_main + 20.53 #[ft]
+z_LG_tail = 3.23 #[ft]
+LG_diff = 20.53 #[ft]
+y_LG = 4.80 #[ft]
+y_lg_to_wingtip = 25.06 #[ft]
+z_lg_to_wingtip = 6.08  #[ft]
+
+#Longitudinal Tip Over Angle:
+theta_LTOA = np.degrees(np.arctan((x_cg_forward-x_LG_main)/z_cg))
+print(theta_LTOA)
+
+#Longitudinal Clearance Angle:
+theta_LCA = np.degrees(np.arctan(z_LG_tail/(x_LG_tail-x_LG_main)))
+print(theta_LCA)
+
+#Lateral Tip-Over Angle:
+main_to_cg_back = x_cg_back - x_LG_main
+cg_back_to_tail = LG_diff - main_to_cg_back
+y_LTOA = y_LG*(cg_back_to_tail/LG_diff)
+psi_LTOA = np.degrees(np.arctan(z_cg/y_LTOA))
+print(psi_LTOA)
+
+#Lateral Ground Clearance Angle
+phi_LGCA = np.degrees(np.arctan(z_lg_to_wingtip/y_lg_to_wingtip))
+print(phi_LGCA)
