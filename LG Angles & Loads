@@ -1,0 +1,81 @@
+import numpy as np
+import math 
+from scipy.optimize import fsolve
+import matplotlib.pyplot as plt
+import os
+import pandas as pd
+
+x_cg_forward = 9.83 #[ft]
+x_cg_mid = 10.83 #[ft]
+x_cg_back = 11.27 #[ft]
+z_cg = 5.58 #[ft]
+x_LG_main = 8.47 #[ft]
+x_LG_tail = x_LG_main + 20.53 #[ft]
+z_LG_tail = 3.65 #[ft]
+LG_diff = 20.53 #[ft]
+y_LG = 4.80 #[ft]
+y_lg_to_wingtip = 25.06 #[ft]
+z_lg_to_wingtip = 6.08  #[ft]
+
+#Longitudinal Tip Over Angle:
+theta_LTOA = np.degrees(np.arctan((x_cg_forward-x_LG_main)/z_cg))
+print(theta_LTOA)
+
+#Longitudinal Clearance Angle:
+theta_LCA = np.degrees(np.arctan(z_LG_tail/(x_LG_tail-x_LG_main)))
+print(theta_LCA)
+
+#Lateral Tip-Over Angle:
+main_to_cg_back = x_cg_back - x_LG_main
+cg_back_to_tail = LG_diff - main_to_cg_back
+y_LTOA = y_LG*(cg_back_to_tail/LG_diff)
+psi_LTOA = np.degrees(np.arctan(z_cg/y_LTOA))
+print(psi_LTOA)
+
+#Lateral Ground Clearance Angle
+phi_LGCA = np.degrees(np.arctan(z_lg_to_wingtip/y_lg_to_wingtip))
+print(phi_LGCA)
+
+#Tire Sizing
+A_d=1.51  #const
+B_d=0.349 #const
+A_w = .7150 #const
+B_w = 0.312 #const
+W = 9008 #lbs
+
+diameter_main = (A_d*((W*0.45)**B_d))*1.3
+diameter_tail = diameter_main*0.25
+width_main = (A_w*((W*0.45)**B_w))*1.3
+width_tail = width_main*0.25
+
+print('Main wheel diameter is {}in'.format(diameter_main))
+print('Tail wheel diameter is {}in'.format(diameter_tail))
+print('Main wheel width is {}in'.format(width_main))
+print('Tail wheel width is {}in'.format(width_tail))
+
+#Static Loading
+B=20.53 #ft
+H = 5.58 #ft
+M_f = 1.36 #ft
+M_a = 2.8 #ft
+N_f = 19.17 #ft
+N_a = 17.73 #ft
+max_static_main = W*(N_f/B)
+max_static_tail = (M_a/B)*W
+min_static_tail = (M_f/B)*W
+dynamic_tail = 0.31*(H/B)*W
+check1 = M_f/B
+check2 = M_a/B
+print('Max static load for main gear is {}lbs'.format(max_static_main))
+print('Max static load for tail gear is {}lbs'.format(max_static_tail))
+print('Min static load for tail gear is {}lbs'.format(min_static_tail))
+print('Dynamic braking load for tail gear is {}lbs'.format(dynamic_tail))
+print('Parameter M_f/B is {} and should be above 0.05'.format(check1))
+print('Parameter M_a/B is {} and should be below 0.20'.format(check2))
+
+#Kinetic Energy
+V_stall = 90 #ft/s
+g = 32.2    #ft/s^2
+
+KE_brake = (0.5*(W/g)*(V_stall**2))/(10e6)
+print('The required braking energy for the aircraft is {}*10e6 ft-lbf'.format(KE_brake))
