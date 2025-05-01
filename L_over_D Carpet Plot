@@ -1,0 +1,50 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Define CD0 and AR values
+cd0_vals = np.array([0.005, 0.01, 0.015, 0.02, 0.025, 0.03])
+AR_vals = np.array([2.5, 5, 7.5, 10, 12.5])
+
+# Wing Loading (W/S) data: rows = AR, columns = CD0
+WS = np.array([
+    [14.41, 20.38, 24.96, 28.82, 32.22, 35.30],
+    [20.38, 28.82, 35.30, 40.76, 45.57, 49.92],
+    [24.96, 35.30, 43.23, 49.92, 55.81, 61.14],
+    [28.82, 40.76, 49.92, 57.64, 64.44, 70.59],
+    [32.22, 45.57, 55.81, 64.44, 72.05, 78.93]
+])
+
+# Lift-to-Drag Ratio (L/D) data
+LD = np.array([
+    [18.00, 12.73, 10.39, 9.00, 8.05, 7.35],
+    [25.45, 18.00, 14.70, 12.73, 11.38, 10.39],
+    [31.18, 22.04, 18.00, 15.59, 13.94, 12.73],
+    [36.00, 25.45, 20.78, 18.00, 16.10, 14.70],
+    [40.25, 28.46, 23.24, 20.12, 18.00, 16.43]
+])
+
+# Plot constant CD0 lines (black solid)
+for j in range(len(cd0_vals)):
+    ws_col = WS[:, j]
+    ld_col = LD[:, j]
+    plt.plot(ws_col, ld_col, 'ko-', linewidth=1)
+    # Label at end of each line (last point, highest AR)
+    plt.text(ws_col[-1] + 1, ld_col[-1]+0.5, f'$C_{{D_0}}={cd0_vals[j]:.3f}$',
+             fontsize=9, color='black', va='center')
+
+# Plot constant AR lines (blue dashed)
+for i in range(len(AR_vals)):
+    ws_row = WS[i, :]
+    ld_row = LD[i, :]
+    plt.plot(ws_row, ld_row, 'bo-', linewidth=1)
+    # Label at end of each line (last point, highest CD0)
+    plt.text(ws_row[-1] + .5, ld_row[-1] - 1, f'AR={AR_vals[i]:.1f}',
+             fontsize=9, color='blue', va='center')
+
+# Plot customization
+plt.xlabel('Wing Loading (W/S) [lb/ft²]')
+plt.ylabel('Lift-to-Drag Ratio (L/D)')
+plt.title('Carpet Plot of L/D vs Wing Loading')
+plt.grid(True)
+plt.tight_layout()
+plt.show()
