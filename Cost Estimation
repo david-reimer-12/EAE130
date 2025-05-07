@@ -1,26 +1,21 @@
+### CDR Cost Update
+
 import numpy as np
 
 # Constant Variables
 CPI = 1.39  # Consumer Price Index (https://www.bls.gov/data/inflation_calculator.htm)
-Q = 275  # Number of aircraft produced over 5 years
+Q = 60  # Number of aircraft produced over 5 years (180 over 15 years)
 y = 2025  # Year of production
 
-def Empty_Weight(concept_number):
-    if concept_number == 1:
-        empty_weight = 4088
-    else:
-        empty_weight = 3313
-    return empty_weight
-
-concept_number = 1 # 2 or 3
-empty_weight = Empty_Weight(concept_number)
+concept_number = 1 
+empty_weight = 5009 # Updated for CDR
 W_Airframe = empty_weight * 0.4  # Airframe weight is 40% of empty weight
 
 print(f"Empty Weight: {empty_weight} lbs")
 print(f"Airframe Weight: {W_Airframe} lbs")
 
 V_H = 250 # Maximum level airspeed [knots/hr]
-Q_M = 4.5 # Number of aircraft produced in one month
+Q_M = Q/12 # Number of aircraft produced in one month
 Q_Proto = 1 # Number of prototype aircraft to be produced
 
 class ConceptOptions:
@@ -268,6 +263,6 @@ def Direct_Op_Cost(concept_number):
     print(f'The Direct Operating Cost of {concept_number} is {DOP_Cost}')
     return DOP_Cost
 
-Cost_of_Development(concept_number)
 Cost_of_Flyaway(concept_number)
 Direct_Op_Cost(concept_number)
+Cost_of_Development(concept_number)
