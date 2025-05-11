@@ -1,0 +1,1211 @@
+import numpy as np
+import math 
+from scipy.optimize import fsolve
+import matplotlib.pyplot as plt
+import os
+import pandas as pd
+from matplotlib.colors import LinearSegmentedColormap
+
+
+#Aircraft Data
+# Wing Parameter
+S_ref = 191 #446     #[ft^2]
+S = S_ref
+AR = 8
+LD_ratio = 11.8
+taper_ratio = 1
+b = (AR*S)**0.5
+c_root = 2*S/(b*(1+taper_ratio))
+t_over_c = 0.15
+S_wing = 446
+sweep = 0
+N_z = 1.5
+chord_length = 7.466
+span = 59.737
+S_csw = chord_length*0.3*span*0.35
+
+#Lift and Drag Data
+C_L_max = 1.4
+C_L_max_TO = 1.4
+C_L_max_L = 1.5
+
+# Weights
+W_TO = 8413
+W_takeoff = W_TO
+W_L =  W_TO
+W_cruise = W_TO
+W = W_TO
+W_crew = 180 #lbm
+W_payload = 2000 #lbm
+W_engine = 500 #lbm
+
+
+# Engine and Hybrid Eff + Ratios
+N_engine = 1
+phi = 0.3 #Hybrid Ratio
+n_p1 = 0.80
+n_p2 = 0
+n_3 = 0.8
+
+n_p = 0.8
+
+# Specific Energy for Fuel and Battery
+e_f =  11940 * 3.41214/2.20462 #W-h/kg ->BTU/lbm
+e_bat = 0.8 * 500 * 3.41214/2.20462 #W-h/kg -> BTU/lbm
+
+# Mission + Flight Parameters
+Range = 3.706*10**(6) #ft
+V_stall = 168.71   #ft/s
+V = 290.3     #ft/s
+V_crz = V
+V_Cruise = V
+n =  1/np.cos(45*(np.pi/180))      #Load Factor
+
+# Performance Parameters
+G_TO = 0.083
+G_ER = 0.04
+G_BALK = 0.03
+k_s_TO_climb = 1.2
+k_s_ER_climb = 1.3
+k_s_BALK = 1.3
+S_a = 600   #[ft]
+
+# Constants
+g = 32.17 # ft/s^2
+rho = 23.77E-4 #slug/ft3
+rho_SL = 1.019E-3 #slug/ft3
+q = (0.5) * rho * V ** 2
+P_ratio = 1.33
+
+# Constant Variables
+CPI = 1.39  # Consumer Price Index (https://www.bls.gov/data/inflation_calculator.htm)
+Q = 275  # Number of aircraft produced over 5 years
+y = 2025  # Year of production
+
+W_over_P = 5
+W_over_S = 44
+
+# Solving for TOP23
+a = 0.0149
+b = 8.134
+c = -1500
+coefficients = [a,b,c]
+roots = np.roots(coefficients)
+TOP_23 = max(roots)
+
+
+
+## Regression Data Ag Aircraft
+def AgRegressionData():
+    global A, B
+    W0 = [3417,2866,6614,9259,4244,10000,7020,3500,3300,3900,6173,6100,10000,6000,6000,6000,12675]
+    We = [2229,1880,3550,5445,2242,4990,3525,2306,2229,2050,3660,2995,4500,3900,3550,3600,7120]
+    log_W0 = np.log10(W0)
+    log_We = np.log10(We)
+    B, A = np.polyfit(log_We, log_W0,1)
+
+## Regression Data Twin Engine Aircraft
+def TwinRegressionData():
+    global A, B
+    W0 = [3900, 5100, 6775, 9630, 5150, 5990,6850,6750,7450,8200,6500,7000,5500,3800,3800,8700,3050,2183,9480,10325,7350,2900]
+    We = [2466,3236,4423,5765,3305,3948,4077,4368,4668,4915,4003,4221,3737,2354,2430,4910,2100,1322,5732,6629,4100,1610]
+    log_W0 = np.log10(W0)
+    log_We = np.log10(We)
+    B, A = np.polyfit(log_We, log_W0,1)
+
+def WePrime():
+    global A, B
+    W0 = [3417,2866,6614,9259,4244,10000,7020,3500,3300,3900,6173,6100,10000,6000,6000,6000,12675]
+    We = [2229,1880,3550,5445,2242,4990,3525,2306,2229,2050,3660,2995,4500,3900,3550,3600,7120]
+    log_W0 = np.log10(W0)
+    log_We = np.log10(We)
+    B, A = np.polyfit(log_We, log_W0,1)
+
+def ComparableAircraftWe():
+    global C_comparable, A_comparable
+    #Comparable Aircraft W_e'
+    #AT-502
+    W_e_AT = 4650
+    S_AT = 312
+    W_pwr_AT = 331
+    W_e_prime_AT = W_e_AT - 2.5*S_AT - W_pwr_AT
+    W0_AT = 10480
+    P_AT = 750
+    #Ag Cat
+    W_e_Ag = 3335
+    S_Ag = 328
+    W_pwr_Ag = 505
+    W_e_prime_Ag = W_e_Ag - 2.5*S_Ag - W_pwr_Ag
+    W0_Ag = 4500
+    P_AgCat = 450
+    #Thrush 
+    W_e_Th = 4800
+    S_Th = 365
+    W_pwr_Th = 390
+    W_e_prime_Th = W_e_Th - 2.5*S_Th - W_pwr_Th
+    W0_Th = 10500
+    P_Thrush = 800
+    #AT-802
+    W_e_AT802 = 6751
+    S_AT802 = 401
+    W_pwr_AT802 = 486
+    W_e_prime_AT802 = W_e_AT802 - 2.5*S_AT802 - W_pwr_AT802
+    W0_AT802 = 16000
+    P_AT802 = 1350
+
+    W0 = np.array([W0_AT, W0_Ag, W0_Th, W0_AT802])
+    W_e_prime = np.array([W_e_prime_AT, W_e_prime_Ag, W_e_prime_Th, W_e_prime_AT802])
+    x = np.log(W0)
+    y = np.log(W_e_prime/W0)
+
+    C_comparable, D = np.polyfit(x,y,1)
+    A_comparable = np.exp(D)
+
+    global P_comparable, S_comparable
+    P_comparable = [P_AT, P_AgCat, P_Thrush, P_AT802]
+    S_comparable = [S_AT, S_Ag, S_Th, S_AT802]
+
+def ZeroLiftDrag():
+    global C_d_0
+    c = 1.0447      #Ag aircraft constant (Roskam)
+    d = 0.5326      #Ag aircraft constant (Roskam)
+    S_wet = (10**c) * (W_TO**d)     #Wetted surface area [ft^2]
+
+    C_f = 0.0055    #Estimated skin friction coefficient (Raymer)
+    a = -2.2218     #Constant based on C_f (Roskam)
+    b = 1.00        #Constant based on C_f (Roskam)
+
+    f = 10**(a + b*(np.log10(S_wet)))       #logarithmic equation for equivalent parasite area (Roskam)
+
+    #Here we will add in additional zero lift drag paramater like canapy and control surface gaps:
+    C_d_0_CS = 0.0005       #Additional drag coefficient value for control surface gaps
+    C_d_0_C = 0.0004        #Additional drag coefficient value for Canopy design
+    C_d_0_A = 0.0008        #Additional drag coefficient value for GPS antenna
+    C_d_0 = (f / S_ref) + C_d_0_CS + C_d_0_C + C_d_0_A
+    print("Zero-Lift Drag Coefficient (C_d_0):", C_d_0)
+    
+def Configuration_Values(configuration):
+    drag_LG = 0.015
+    drag_Flaps_TO = 0.01
+    drag_Flaps_L = 0.060
+    e_clean = 0.825
+    e_LG = e_clean
+    e_Flaps_TO = 0.775
+    e_Flaps_L = 0.725
+
+    if configuration == 1:
+        del_C_d_0 = drag_LG
+        e = e_LG
+    elif configuration == 2:
+        del_C_d_0 = drag_LG + drag_Flaps_TO
+        e = e_Flaps_TO
+    elif configuration == 3:
+        del_C_d_0 = drag_LG + drag_Flaps_L
+        e = e_Flaps_L
+    else:
+        return "Configuration input is not possible"
+    return del_C_d_0, e
+
+def PlotDragPolar():
+    global e_1, e_2, e_3, k
+    #Create an array of values for C_L:
+    C_L = np.linspace(-2,2,100)
+
+    del_C_d_0_1, e_1 = Configuration_Values(1)
+    del_C_d_0_2, e_2 = Configuration_Values(2)
+    del_C_d_0_3, e_3 = Configuration_Values(3)
+
+    C_D_1 = (C_d_0 + del_C_d_0_1) + ((C_L**2) / (np.pi * e_1 * AR))
+    C_D_2 = (C_d_0 + del_C_d_0_2) + ((C_L**2) / (np.pi * e_2 * AR))
+    C_D_3 = (C_d_0 + del_C_d_0_3) + ((C_L**2) / (np.pi * e_3 * AR))
+    k= 1/(np.pi*e_1*AR)
+    plt.figure(figsize=(10,6))
+    plt.title('Drag Polars for 3 Aircraft Configurations')
+    plt.xlabel("$C_D$")      
+    plt.ylabel("$C_L$")
+    line = 3      #creates a larger linewidth
+    plt.plot(C_D_1, C_L, color='blue', linewidth=line, label='Configuration #1: Static LG')
+    plt.plot(C_D_2, C_L, color='red', linewidth=line, label='Configuration #2: Static LG, Takeoff Flaps')
+    plt.plot(C_D_3, C_L, color='green', linewidth=line, label='Configuration #3: Static LG, Landing Flaps')
+    plt.legend(loc='best', fontsize='10', framealpha=1)
+    plt.show()
+
+def WeightEstimationUpdated():
+    global W0, S, W_e
+    W_guess = 10000 #lb
+    C_D_0 = C_d_0
+    S = S_ref
+    tol = 10**(-6)
+    error = 2*tol
+    W0 = W_guess
+
+    P_values = []
+    S_values = []
+
+    def equation(E0_tot):
+        term1 = (n_3 * e_f / g) * LD_ratio * (n_p1 + (n_p2 * phi / (1 - phi)))
+        numerator = W_e + W_payload + (g / e_bat) * E0_tot * (phi + (e_bat / e_f) * (1 - phi)) 
+        denominator = W_e + W_payload + (g / e_bat) * phi * E0_tot 
+        eq = term1 * np.log(numerator / denominator) - Range
+        
+        return eq
+    
+    while tol < error:
+        global W_e
+       #W_Wing = 2.5*S
+        W_Wing = 0.0051*(W0*N_z)**0.557*S_wing**0.649*AR**0.5*(t_over_c)**(-0.4)*(1+taper_ratio)**0.1*np.cos(sweep)**(-1)*S_csw**(0.1)
+
+        We_prime_frac = A_comparable*W0**C_comparable 
+        We_prime = We_prime_frac*W0
+        W_e = We_prime + W_Wing + W_engine
+
+        #Range = n_3 * e_f/g * (LD_ratio) * (n_p1+n_p2*phi/(1-phi))*np.log((W_e+W_payload+g/e_bat*E0_tot*(phi+e_bat/e_f*(1-phi)))/(W_e+W_payload+g/e_bat*phi*E0_tot))
+
+        # Initial guess for E0_tot
+        E0_tot_guess = 5
+        # Solve for E0_tot
+        E0_tot = fsolve(equation, E0_tot_guess)  
+
+        W_f = g/e_f *(1-phi)*E0_tot
+        W_battery = g/e_bat * phi*E0_tot
+        W0_new = W_crew +W_payload + W_f + W_battery + W_e
+
+        P = W0_new / W_over_P
+        S = W0_new / W_over_S
+
+        error = abs((W0_new - W0)/W0_new)
+        print('-----------------')
+        #print('equation',test)
+        print('We_prime', We_prime)
+        print('W_e',W_e)
+        print('E0_tot', E0_tot)
+        print('W0', W0_new)
+        print('error', error)
+
+        W0 = W0_new
+        P_values.append(P)
+        S_values.append(S)
+
+        if tol > error:
+            print('--------------------------')
+            print('------Final Values--------')
+            print("E0")
+            print(E0_tot)
+            print("TOGW")
+            print(W0)
+            print("Empty Weight:")
+            print(W_e)
+            print("Power")
+            print(P)
+            print('Wing Area')
+            print(S)
+            print('battery weight')
+            print(W_battery)
+            print('fuel weight')
+            print(W_f)
+            print(W_Wing)
+            print('--------------------------')
+            print('--------------------------')
+
+    #     #Plot P vs. S
+    plt.figure(figsize=(8, 6))
+    plt.plot(S_values, P_values, marker='o', linestyle='-', color='b')
+    plt.xlabel('Wing Area (S) [ft²]')
+    plt.ylabel('Power (P) [hp]')
+    plt.title('Power vs. Wing Area')
+    plt.grid()
+    plt.show()
+    
+    # Plot P vs. S Comparable
+    coeffs = np.polyfit(S_comparable, P_comparable, 1)
+    S_range = np.linspace(100, 600, 100)
+    P_trend = coeffs[0] * S_range + coeffs[1]
+
+    W0_final = W_TO
+    #Takeoff Constraint:
+    P_over_W_TO = ((W0_final/S_range) / (TOP_23 * (rho/rho_SL) * C_L_max))
+    P_TO = (P_over_W_TO)*W0_final
+
+    # Landing Constraint (redefined as a function of S_range)
+    W_over_S_Landing = (80 * ((W0_final/S_range) / ((rho/rho_SL)*C_L_max_L))) + S_a
+    P_Landing = (W_over_S_Landing) * W0_final  # Convert to power
+    P_range = np.linspace(0,2500,100)
+
+    #Stall Constraint:
+    W_stall = (1/2) * rho * (V_stall**2) * C_L_max * S_range
+    S_Stall = (W_stall)**-1*S_range * W0_final
+
+    #Climb Constraint(no climb corrections included due to immediate landing):
+    V_climb = k_s_TO_climb * V_stall
+    C_L_max_CL = (2*W0_final) / (rho *(V_climb /k_s_TO_climb)**2)
+    C_L_climb = C_L_max_CL / (k_s_TO_climb**2)
+    V_climb = np.sqrt((2/(rho*C_L_max_CL)) * (W0_final/S_range))
+
+    #TO Climb:
+    T_over_W_TOclimb = (((k_s_TO_climb)**2 * C_D_0)/C_L_max_CL) + ((1/(np.pi*e_2*AR)) * ((C_L_max_CL/(k_s_TO_climb**2)))) + G_TO
+    P_over_W_TOclimb = T_over_W_TOclimb / ((550*n_p)/V_climb)
+    P_TOclimb = P_over_W_TOclimb*W0_final
+
+    #En Route Climb:
+    T_over_W_ERclimb = (((k_s_ER_climb)**2 * C_D_0)/C_L_max_CL) + ((1/(np.pi*e_1*AR)) * ((C_L_max_CL/(k_s_ER_climb**2)))) + G_ER
+    P_over_W_ERclimb = T_over_W_ERclimb / ((550*n_p)/V_climb)
+    P_ERclimb = (P_over_W_ERclimb)*W0_final
+
+    #Balked Climb:
+    T_over_W_BALKclimb = (((k_s_BALK)**2 * C_D_0)/C_L_max_CL) + ((1/(np.pi*e_1*AR)) * ((C_L_max_CL/(k_s_ER_climb**2)))) + G_BALK
+    P_over_W_BALKclimb = T_over_W_BALKclimb / ((550*n_p)/V_climb)
+    P_BALKclimb = (P_over_W_BALKclimb)*W0_final
+
+    #Cruise Constraint:
+    q_crz = 0.5 * rho * (V_crz**2)
+    T_over_W_crz = (((q_crz*C_D_0) / (W0_final/S_range)) + (k/q_crz)*(W0_final/S_range))
+    P_over_W_crz = T_over_W_crz / ((550*n_p)/V_crz)
+    P_crz = P_over_W_crz*W0_final
+
+    #Absolute Ceiling Constraint:
+    T_over_W_Cieling_abs = 2*np.sqrt(k*C_D_0)
+    P_over_W_Cieling_abs = T_over_W_Cieling_abs / ((550*n_p)/np.sqrt((2/(rho*C_L_max))*(W0_final/S_range)))
+    P_cieling_abs = P_over_W_Cieling_abs * W0_final
+
+#Maneuver Constraint: **STILL NEED TO COMPUTE THE LOAD FACTOR AND MANEUVER STALL SPEED**
+    T_over_W_maneuver = ((q_crz*C_D_0)/(W0_final/S_range)) + (k*(n**2 / q)*(W0_final/S_range))
+    P_over_w_maneuver = T_over_W_maneuver / ((550*n_p)/np.sqrt((2/(rho*C_L_max))*(W0_final/S_range)))
+    P_maneuver = P_over_w_maneuver*W0_final
+
+    # Plot P vs. S
+    line = 2
+    plt.figure(figsize=(8, 6))
+    plt.scatter(446, 1366, marker='o', color='b', s=80, label='Design Point')
+    plt.plot(S_range, P_TO, color='cyan', linewidth=line, label='Takeoff')
+    plt.plot(S_range, P_Landing, color='green', linewidth=line, label='Landing')
+    plt.plot(S_Stall, P_range, color='red', linewidth=line, label='Stall')
+    plt.plot(S_range, P_ERclimb, color='pink', linewidth=line, label='ER Climb')
+    plt.plot(S_range, P_TOclimb, color='black', linewidth=line, label='TO Climb')
+    plt.plot(S_range, P_BALKclimb, color='brown', linewidth=line, label='Balk Climb')
+    plt.plot(S_range, P_crz, color='orange', linewidth=line, label='Cruise')
+    plt.plot(S_range, P_cieling_abs, color='olive', linewidth=line, label='Ceiling')
+    plt.plot(S_range, P_maneuver, color='lime', linewidth=line, label='Maneuver')
+    plt.scatter(S_comparable, P_comparable, marker='s', color='r', label='Comparable Aircraft')
+    aircraft_labels = ["AT-502", "Ag Cat", "Thrush", "AT-802"]
+    for i, label in enumerate(aircraft_labels):
+        plt.annotate(label, (S_comparable[i], P_comparable[i]), textcoords="offset points", xytext=(5,5), ha='right', fontsize=10, color='black')
+
+    # Shade the area above balked climb, to the right of landing, and to the left of cruise
+    plt.fill_between(
+        S_range,  # X-values (wing area)
+        P_TOclimb,  
+        2500,  # Upper boundary (top of the plot)
+        where=(S_range > 175 ) & (S_range < 446),  # Condition: x > 379
+        color='cyan', alpha=0.3, label='Feasability Region'
+    )
+    plt.fill_between(
+        S_range,  # X-values (wing area)
+        P_crz,  
+        2500,  # Upper boundary (top of the plot)
+        where=(S_range > 443),
+        color='cyan', alpha=0.3, 
+    )
+    plt.xlabel('Wing Area (S) [ft²]')
+    plt.ylabel('Power (P) [hp]')
+    plt.title('Power vs. Wing Area')
+    plt.xlim(100, 600)
+    plt.ylim(0, 2500)
+    plt.legend(
+        fontsize='small',  # Smaller font size
+        loc='lower right',  # Move legend to bottom right
+        bbox_to_anchor=(1.0, 0.0)  # Fine-tune position (optional)
+    )
+    plt.grid()
+    plt.show()
+
+def WingEstimation():
+    V_stall = 90
+    S = 446
+    b = (AR*S)**0.5
+    taper_ratio = 1
+    c_root = 2*S/(b*(1+taper_ratio))
+    W0 = 9050
+    MAC = 2/3 * (1+taper_ratio+taper_ratio**2)/(1+taper_ratio) * c_root
+    Spanwise_Location = b/6*(1+2*taper_ratio)/(1+taper_ratio)
+    C_L_Cruise = 2*W0/(rho*S*V_Cruise**2)
+    C_L_Stall =  2*W0/(rho*S*V_stall**2)
+    print('MAC')
+    print(MAC)
+    print('Spanwise Location')
+    print(Spanwise_Location)
+    print('Span')
+    print(b)
+    print('Chord Length')
+    print(c_root)
+    print("CL Cruise")
+    print(C_L_Cruise)
+    print("CL Stall")
+    print(C_L_Stall)
+
+def WeightEstimation():
+    W_crew = 180 #lbs
+    W_payload = 2000 #lbs
+    Range = 3.706*10**(6) #ft
+    Endurance = 28800 #seconds
+    V_inf = 290.303 #ft/s
+    SFC = 7.06*10**(-9) #1/ft
+    prop_eff = 0.8
+    LD_ratio = 11.8
+    W_guess = 5000
+    cruise = math.exp(-(Range*SFC)/(prop_eff*LD_ratio))
+    loiter = math.exp((-Endurance*V_inf*SFC)/(prop_eff*LD_ratio))
+    fuel_weight_ratio = 1 - 0.996*0.995*0.996*0.998*0.999*0.998*cruise*loiter
+    tol = 10**(-6)
+    error = 2*tol
+    W0 = W_guess
+
+    while tol < error:
+        empty_weight_frac = 10**(-A/B) * W0 **(1/B-1)
+        W0_new = (W_crew + W_payload)/(1-1.06*fuel_weight_ratio-empty_weight_frac) + 400
+        error = abs((W0_new - W0)/W0_new)
+        W0 = W0_new
+
+        if tol > error:
+            We = empty_weight_frac*W0
+            print("TOGW")
+            print(W0)
+            print("Empty Weight:")
+            print(We)
+
+######################
+
+
+ComparableAircraftWe()
+ZeroLiftDrag()
+PlotDragPolar()
+WeightEstimationUpdated()
+WingEstimation()
+
+
+#####################
+
+def Empty_Weight(concept_number):
+    if concept_number == 1:
+        empty_weight = 4088
+    else:
+        empty_weight = W_e
+    return empty_weight
+
+concept_number = 2 # 2 or 3
+empty_weight = Empty_Weight(concept_number)
+W_Airframe = empty_weight * 0.4  # Airframe weight is 40% of empty weight
+
+print(f"Empty Weight: {empty_weight} lbs")
+print(f"Airframe Weight: {W_Airframe} lbs")
+
+V_H = 250 # Maximum level airspeed [knots/hr]
+Q_M = 4.5 # Number of aircraft produced in one month
+Q_Proto = 1 # Number of prototype aircraft to be produced
+
+class ConceptOptions:
+    taper = "No" # no means the wing is tapered, yes means wing is untapered
+    composites = "No"
+    flaps = "Yes"
+
+concept_options = ConceptOptions()
+
+# Note All Cost Factors From Finger et al. 2019
+
+# Cost of Development
+
+def Engineering_Cost(concept_number):
+    F_Comp = 2 if concept_options.composites == "Yes" else 1
+    F_CF = 1.03 if concept_options.flaps == "Yes" else 1
+    F_Press = 1.03
+    F_HyE = 1.33
+    R_ENG = 2.576 * y - 5058  # Hourly rate of engineers (Nicholai & Carichner) 
+    Cost_of_Engineering = (0.083 * W_Airframe**0.791 * V_H**1.521 * Q**0.183 * F_CF * F_Comp * 
+                           F_Press * F_HyE * R_ENG * CPI) #Finger et al. 2019
+    print(f'The Cost of Engineering for Concept {concept_number} is {Cost_of_Engineering}')
+    return Cost_of_Engineering
+
+def Tooling_Cost(concept_number):
+    F_Comp = 2 if concept_options.composites == "Yes" else 1
+    F_CF = 1.02 if concept_options.flaps == "Yes" else 1
+    F_Taper = 0.95 if concept_options.taper == "Yes" else 1
+    F_Press = 1.01
+    F_HyE = 1.10
+    R_Tool = 2.883 * y - 5666 # (Nicholai & Carichner) 
+    Cost_of_Tooling = (2.1036 * W_Airframe**0.764 * V_H**0.899 * Q**0.178 * Q_M**0.066 * F_Taper * 
+                       F_CF * F_Comp * F_Press * F_HyE * R_Tool * CPI) #Finger et al. 2019
+    print(f'The Cost of Tooling for Concept {concept_number} is {Cost_of_Tooling}')
+    return Cost_of_Tooling
+
+def Development_Support_Cost(concept_number):
+    F_Comp = 1.5 if concept_options.composites == "Yes" else 1
+    F_CF = 1.01 if concept_options.flaps == "Yes" else 1
+    F_Press = 1.03
+    F_HyE = 1.05
+    Cost_of_Development_Support = (0.06458 * W_Airframe**0.873 * V_H**1.89 * Q_Proto**0.346
+                                    * F_CF * F_Comp * F_Press * F_HyE * CPI) #Finger et al. 2019
+    print(f'The Cost of Development Support for Concept {concept_number} is {Cost_of_Development_Support}')
+    return Cost_of_Development_Support
+
+def Flight_Test_Ops_Cost(concept_number):
+    F_HyE = 1.50
+    Cost_of_Flight_Test_Ops = (0.009646 * W_Airframe**1.16 * V_H**1.3718 * Q_Proto**1.281 * 
+                             F_HyE * CPI) #Finger et al. 2019
+    print(f'The Cost of Flight Test Operations for Concept {concept_number} is {Cost_of_Flight_Test_Ops}')
+    return Cost_of_Flight_Test_Ops
+
+def Cost_of_Development(concept_number):
+    Engineering = Engineering_Cost(concept_number)
+    Tooling = Tooling_Cost(concept_number)
+    Development_Support = Development_Support_Cost(concept_number)
+    Flight_Test_Ops = Flight_Test_Ops_Cost(concept_number)
+    Cost_of_Dev = (Engineering + Tooling + Development_Support + 
+                            Flight_Test_Ops) #Finger et al. 2019
+    print(f'The Cost of Development for Concept {concept_number} is {Cost_of_Dev}')
+    return Cost_of_Dev
+
+# Flyaway Cost 
+
+def Cost_of_Materials(concept_number):
+    F_CF = 1.02 if concept_options.flaps == "Yes" else 1
+    F_Press = 1.01
+    F_HyE = 1.05
+    Cost_of_Materials = (24.896 * W_Airframe**0.689 * V_H**0.624 * Q**0.792 * CPI * 
+                         F_CF * F_Press * F_HyE) / Q #Finger et al. 2019
+    print(f'The Cost of Materials for Concept {concept_number} is {Cost_of_Materials}')
+    return Cost_of_Materials
+
+def Manufacturing_Cost(concept_number):
+    F_HyE = 1.10
+    F_Comp = 1.25 if concept_options.composites == "Yes" else 1
+    F_CF = 1.01 if concept_options.flaps == "Yes" else 1
+    R_MFG = 2.316 * y - 4552 # (Nicholai & Carichner) 
+    Cost_of_Manufacturing = (20.2588 * W_Airframe**0.74 * V_H**0.543 * Q**0.524 * F_CF * 
+                             F_Comp * F_HyE * R_MFG * CPI) / Q #Finger et al. 2019
+    print(f'The Cost of Manufacturing for Concept {concept_number} is {Cost_of_Manufacturing}')
+    return Cost_of_Manufacturing
+
+def Quality_Control_Cost(concept_number):
+    F_Comp = 1.5 if concept_options.composites == "Yes" else 1
+    F_HyE = 1.5
+    C_MFG = Manufacturing_Cost(concept_number)
+    Cost_of_Quality_Control = 0.13 * C_MFG * F_Comp * F_HyE #Finger et al. 2019
+    print(f'The Cost of Quality Control for Concept {concept_number} is {Cost_of_Quality_Control}')
+    return Cost_of_Quality_Control
+
+#Fixed Costs
+Cost_Fixed_landing = -7500 #Subract $7,500 for fixed landing gear (Finger et al. 2019)
+Cost_Pt_23 = 15000 #Part 23 aircraft
+Cost_Miscelaneous =  Cost_Fixed_landing + Cost_Pt_23
+
+# Flyaway Factors
+F_EXP = 0.95
+F_QDF = F_EXP ** (1.4427 * np.log(Q)) #Quantity Discount Factor (Finger et al. 2019)
+F_Insurance = 1.15 # Cost of Insurance is 15-20% of the total cost to produce for hyrbrid (Finger et al. 2019)
+F_profit = 1.10 # 10% Profit (Finger et al. 2019)
+
+#Engine Costs
+def Electric_Motor_Cost(concept_number):
+    if concept_number == 1:  #Number of motors
+        N_motor = 2
+    else:
+        N_motor = 1
+    P_EM = 76 #[hp]
+    Cost_of_Electric_Motor = 174 * N_motor * P_EM * CPI   #Finger et al. 2019
+    print(f'The Cost of the Electric Motor for Concept {concept_number} is ${Cost_of_Electric_Motor}')
+    return Cost_of_Electric_Motor
+
+def Power_Management_Cost(concept_number):
+    P_EM = 76 #[hp]
+    Cost_of_Power_Management_System = 150 * P_EM * CPI  #Finger at al. 2019
+    print(f'The Cost of the Power Management System for Concept {concept_number} is ${Cost_of_Power_Management_System}')
+    return Cost_of_Power_Management_System
+
+def Battery_Cost(concept_number):
+    E_bat = 18 #[kWh]
+    Cost_of_Battery = 150 * E_bat * CPI  #Finger at al. 2019
+    print(f'The Cost of the Battery for Concept {concept_number} is ${Cost_of_Battery}')
+    return Cost_of_Battery
+
+def Propeller_Cost(concept_number):
+    if concept_number == 1:  #Number of propellers
+        N_prop = 2
+    else:
+        N_prop = 1
+    if concept_number == 1:  #prop diamter [ft]
+        D_P = 6
+    if concept_number ==1:
+        D_P = 7
+    else:
+        D_P = 8
+    P_SHP = 221
+    Cost_of_Propeller = 210 * N_prop * CPI * (D_P)**2 * (P_SHP / D_P)**0.12   #Finger at al. 2019
+    print(f'The Cost of the Propeller(s) for concept {concept_number} is ${Cost_of_Propeller}')
+    return Cost_of_Propeller
+
+def Cost_of_Engine(concept_number):
+    Electric = Electric_Motor_Cost(concept_number)
+    Power = Power_Management_Cost(concept_number)
+    Battery = Battery_Cost(concept_number)
+    Propeller = Propeller_Cost(concept_number)
+    Cost_of_Engine = Electric + Power + Battery + Propeller 
+    print(f'The Cost of the Engine for concept {concept_number} is ${Cost_of_Engine}')
+    return Cost_of_Engine
+
+def Cost_of_Flyaway(concept_number):
+    Materials = Cost_of_Materials(concept_number)
+    Manufacturing = Manufacturing_Cost(concept_number)
+    Engine = Cost_of_Engine(concept_number)
+    Quality_Control = Quality_Control_Cost(concept_number)
+    Misc = Cost_Miscelaneous
+    Flyaway_Cost = ((Materials + Engine + Misc + Manufacturing + Quality_Control) * F_QDF * F_Insurance * F_profit)
+    print(f'The Flyaway Cost for Concept {concept_number} is {Flyaway_Cost}') 
+    return Flyaway_Cost
+
+# Direct Operating Cost
+def Fuel_Cost(concept_number):
+    W_fuel = 192 #[kg]
+    P_fuel = 6.93 #[$/gal]
+    rho_fuel = 2.72928 #[kg/gal]
+    Cost_of_Fuel = 1.02 * W_fuel * (P_fuel / rho_fuel)   #Metabook
+    print(f'The Cost of Fuel for Concept {concept_number} is ${Cost_of_Fuel}')
+    return Cost_of_Fuel
+
+def Oil_Cost(concept_number):
+    W_oil = 192 #[kg]
+    P_oil = 6.93 #[$/gal]
+    rho_oil = 3.3728 #[kg/gal]
+    Cost_of_Oil = 1.02 * W_oil * (P_oil / rho_oil)   #Metabook
+    print(f'The Cost of Oil for Concept {concept_number} is ${Cost_of_Oil}')
+    return Cost_of_Oil
+
+def Electricity_Cost(concept_number):
+    W_battery = 93 #[kg]
+    P_electricity = 0.1654 #[$/kWh]
+    Battery_Specific_Energy = 1.9 #[kWh/kg] 
+    Cost_of_Electricity = 1.05 * W_battery * P_electricity * Battery_Specific_Energy
+    print(f'The Cost of Electricity {concept_number} is ${Cost_of_Electricity}')
+    return Cost_of_Electricity
+
+def Annual_Utilization(concept_number):
+    t_b = 2.0 # Updated typical operational block time in hours for a turboprop # Some operational time factor
+    U_annual = 1.5 * 10**3 * (3.4546 * t_b + 2.994 - (12.289 * t_b**2 - 5.6626 * t_b + 8.964) ** 0.5)
+    print(f'Annual Utilization is {U_annual}')
+    return U_annual
+
+def Depreciation_Cost(concept_number):
+    C_unit = 2205000 # Unit cost of aircraft
+    K_depreciation = concept_number # Depreciation factor
+    t_b = concept_number # Operational time factor
+    n = concept_number # Number of years or cycles
+    U_annual = Annual_Utilization(concept_number)
+    C_depreciation = (C_unit * (1 - K_depreciation * t_b)) / (n * U_annual)
+    print(f'The Cost of Depreciation for Concept {concept_number} is {C_depreciation}')
+    return C_depreciation
+
+def Registration_Cost(concept_number):
+    MTOW = 16000 # Maximum takeoff weight for a commonly used turboprop # Maximum takeoff weight
+    DOC = 1256 # Direct operating cost
+    C_registration = (0.001 + 10**-8 * MTOW) * DOC
+    print(f'The Cost of Registration for Concept {concept_number} is {C_registration}')
+    return C_registration
+
+
+def Financing_Cost(concept_number):
+    DOC = 1256 # Direct operating cost
+    C_finance = 0.07 * DOC
+    print(f'The Cost of Financing for Concept {concept_number} is {C_finance}')
+    return C_finance
+
+
+def Navigation_Fees(concept_number):
+    CEF = 1.03 # Cost escalation factor (~3% per year, typically used in aviation-related financial models)
+    R = concept_number # Mission range
+    t_b = concept_number # Operational time factor
+    MTOW = 16000 # Maximum takeoff weight for a commonly used turboprop # Maximum takeoff weight
+    C_navigation = 0.5 * CEF * (1.852 * R / t_b) * ((0.00045359237 * MTOW) / 50) ** 0.5
+    print(f'The Cost of Navigation Fees for Concept {concept_number} is {C_navigation}')
+    return C_navigation
+
+
+def Airport_Fees(concept_number):
+    MTOW = 16000 # Maximum takeoff weight for a commonly used turboprop # Maximum takeoff weight
+    CEF = 1.03 # Cost escalation factor (~3% per year, typically used in aviation-related financial models)
+    C_airport = 1.5 * (MTOW / 1000) * CEF
+    print(f'The Cost of Airport Fees for Concept {concept_number} is {C_airport}')
+    return C_airport
+
+def Direct_Op_Cost(concept_number):
+    Fuel = Fuel_Cost(concept_number)
+    Oil = Oil_Cost(concept_number)
+    Electric = Electricity_Cost(concept_number)
+    Deprecitation = Depreciation_Cost(concept_number)
+    Registration = Registration_Cost(concept_number)
+    Financing = Financing_Cost(concept_number)
+    Nav = Navigation_Fees(concept_number)
+    Airport = Airport_Fees(concept_number)
+    DOP_Cost = (Fuel  + Oil + Electric + Deprecitation + Registration + Financing + Nav + Airport)
+    print(f'The Direct Operating Cost of {concept_number} is {DOP_Cost}')
+    return DOP_Cost
+
+def CGCalculation():
+    # Aircraft weights (lbs)
+    W_TO = 9040
+    W_engine = 486
+    W_electricMotor = 117
+    W_spraysystem = 330
+    W_Powerplant = W_engine + W_electricMotor
+    W_battery = 1990
+    W_FixedEquipment = 81.44 + 129.1 + 9.05 + 57.2 + 192.41 + W_spraysystem
+    W_EmptyWeight = 4713
+    W_Wing = 509.55
+    W_Empenn = 80.63 + 50.97
+    W_Vertical = 50.97
+    W_Horizontal = 80.63
+    W_Fuse = 299.5  # Fixed the value (removed semicolon)
+    W_Landing = 48 + 75 + 21 + 4.52 + 103.67
+    W_pilot = 260
+    W_payload = 2000
+    W_fuel = 1707
+
+    # CG positions (inches from nose)
+    L_fuselage = 30.5
+    x_fuse = 0.26 * L_fuselage
+    x_wing = 7.71 + 0.25 * 7.46
+    x_powerplant = 2.5
+    x_fixedequipment = 10.83
+    x_vertical = 0.3 * 5.43 + 28.54
+    x_horizontal = 0.3 * 3.76 + 27.54
+    x_landing = 8.47
+    x_payload = 12.5
+    x_fuel = 7.71 + 0.5 * 7.46
+    x_battery = 16.5
+    x_pilot = 10.5
+
+    # Print out component information for verification
+    print('Powerplant Weight:', W_Powerplant, 'lbs at', x_powerplant, 'inches')
+    print('Battery Weight:', W_battery, 'lbs at', x_battery, 'inches')
+    print('Fixed Equipment Weight:', W_FixedEquipment, 'lbs at', x_fixedequipment, 'inches')
+    print('Wing Weight:', W_Wing, 'lbs at', x_wing, 'inches')
+    print('Vertical Tail Weight:', W_Vertical, 'lbs at', x_vertical, 'inches')
+    print('Horizontal Tail Weight:', W_Horizontal, 'lbs at', x_horizontal, 'inches')
+    print('Fuselage Weight:', W_Fuse, 'lbs at', x_fuse, 'inches')
+    print('Landing Gear Weight:', W_Landing, 'lbs at', x_landing, 'inches')
+    print('Pilot Weight:', W_pilot, 'lbs at', x_pilot, 'inches')
+    print('Max Payload Weight:', W_payload, 'lbs at', x_payload, 'inches')
+    print('Max Fuel Weight:', W_fuel, 'lbs at', x_fuel, 'inches')
+
+    # Function to calculate CG
+    def calculate_cg(W_payload, W_fuel):
+        x_cg = (W_fuel * x_fuel + 
+                W_Fuse * x_fuse + 
+                W_Wing * x_wing + 
+                W_Powerplant * x_powerplant + 
+                W_FixedEquipment * x_fixedequipment + 
+                W_Vertical * x_vertical + 
+                W_Horizontal * x_horizontal + 
+                W_Landing * x_landing +
+                W_payload * x_payload +
+                W_battery * x_battery +
+                W_pilot * x_pilot) / (W_fuel + W_Fuse + W_Wing + W_Powerplant + 
+                                    W_FixedEquipment + W_Vertical + W_Horizontal + 
+                                    W_Landing + W_payload + W_battery + W_pilot)
+        return x_cg
+
+    # Calculate total weight for any configuration
+    def calculate_total_weight(W_payload, W_fuel):
+        return (W_fuel + W_Fuse + W_Wing + W_Powerplant + 
+                W_FixedEquipment + W_Vertical + W_Horizontal + 
+                W_Landing + W_payload + W_battery + W_pilot)
+
+    # Calculate CG for default values
+    max_payload = W_payload
+    max_fuel = W_fuel
+    cg_default = calculate_cg(max_payload, max_fuel)
+    print(f"\nDefault CG (full payload, full fuel): {cg_default:.2f} ft")
+    cg_no_payload = calculate_cg(0, max_fuel)
+    print(f"CG with no payload, full fuel: {cg_no_payload:.2f} ft")
+    cg_no_fuel = calculate_cg(max_payload, 0)
+    print(f"CG with full payload, no fuel: {cg_no_fuel:.2f} ft")
+    cg_empty = calculate_cg(0, 0)
+    print(f"CG with no payload, no fuel: {cg_empty:.2f} ft")
+
+    # Create data for contour plot
+    payload_percentages = np.linspace(0, 100, 21)  # 0% to 100% in 5% steps
+    fuel_percentages = np.linspace(0, 100, 21)    # 0% to 100% in 5% steps
+
+    # Create meshgrid
+    X, Y = np.meshgrid(payload_percentages, fuel_percentages)
+    Z = np.zeros_like(X)
+    W = np.zeros_like(X)  # For weight values
+
+    # Calculate CG and Weight for each combination
+    for i in range(len(payload_percentages)):
+        for j in range(len(fuel_percentages)):
+            payload_weight = max_payload * (payload_percentages[i] / 100)
+            fuel_weight = max_fuel * (fuel_percentages[j] / 100)
+            Z[j, i] = calculate_cg(payload_weight, fuel_weight)
+            W[j, i] = calculate_total_weight(payload_weight, fuel_weight)
+
+    # Create a 2D plot with contours
+    plt.figure(figsize=(12, 8))
+
+    # Create a custom colormap transitioning from red to yellow to green
+    colors = [(0.8, 0, 0), (1, 1, 0), (0, 0.6, 0)]
+    cmap = LinearSegmentedColormap.from_list("RYG", colors, N=100)
+
+    # Create contour plot
+    contour = plt.contourf(X, Y, Z, 20, cmap=cmap)
+    plt.colorbar(contour, label='CG Position (ft from nose)')
+
+    # Add contour lines with labels
+    contour_lines = plt.contour(X, Y, Z, 10, colors='black', linewidths=0.5)
+    plt.clabel(contour_lines, inline=True, fontsize=8, fmt='%.2f')
+
+    # Plot extreme points
+    plt.plot(0, 0, 'ko', markersize=8, label=f'Empty ({cg_empty:.2f} ft)')
+    plt.plot(0, 100, 'ko', markersize=8, label=f'Full Fuel, No Payload ({cg_no_payload:.2f} ft)')
+    plt.plot(100, 0, 'ko', markersize=8, label=f'Full Payload, No Fuel ({cg_no_fuel:.2f} ft)')
+    plt.plot(100, 100, 'ko', markersize=8, label=f'Full Payload, Full Fuel ({cg_default:.2f} ft)')
+
+    # Create the CG envelope as a polygon connecting the extreme loading cases
+    plt.plot([0, 0, 100, 100, 0], [0, 100, 100, 0, 0], 'k--', linewidth=2, label='Loading Envelope')
+
+    # Add grid, labels and title
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.xlabel('Payload (% of maximum 2000 lbs)')
+    plt.ylabel('Fuel (% of maximum 1707 lbs)')
+    plt.title('Aircraft CG Position Variation with Payload and Fuel Loading')
+    plt.legend(loc='best')
+
+    # Create a second plot: CG vs Weight
+    plt.figure(figsize=(12, 8))
+
+    # Calculate empty weight (no fuel, no payload, but with pilot and battery)
+    operating_empty_weight = W_Fuse + W_Wing + W_Powerplant + W_FixedEquipment + W_Vertical + W_Horizontal + W_Landing + W_battery + W_pilot
+    print(f"\nOperating Empty Weight (with pilot and battery): {operating_empty_weight:.2f} lbs")
+
+    # Create data for CG envelope
+    payload_ranges = [0, 0.25, 0.5, 0.75, 1.0]  # Fractions of max payload
+    fuel_ranges = [0, 0.25, 0.5, 0.75, 1.0]     # Fractions of max fuel
+
+    # Generate different loading conditions
+    for p_frac in payload_ranges:
+        p_weight = p_frac * max_payload
+        
+        # Create a fuel burn-off line for this payload
+        weights = []
+        cgs = []
+        
+        for f_frac in fuel_ranges:
+            f_weight = f_frac * max_fuel
+            total_weight = operating_empty_weight + p_weight + f_weight
+            cg = calculate_cg(p_weight, f_weight)
+            
+            weights.append(total_weight)
+            cgs.append(cg)
+        
+        # Plot fuel burn-off line for this payload setting
+        plt.plot(cgs, weights, 'o-', linewidth=1.5, label=f"{int(p_frac*100)}% Payload")
+
+    # Create CG envelope
+    empty_cg = calculate_cg(0, 0)
+    full_fuel_no_payload_cg = calculate_cg(0, max_fuel)
+    full_payload_no_fuel_cg = calculate_cg(max_payload, 0)
+    full_payload_full_fuel_cg = calculate_cg(max_payload, max_fuel)
+
+    empty_weight = operating_empty_weight
+    full_fuel_no_payload_weight = operating_empty_weight + max_fuel
+    full_payload_no_fuel_weight = operating_empty_weight + max_payload
+    full_payload_full_fuel_weight = operating_empty_weight + max_payload + max_fuel
+
+    # Plot the CG envelope
+    envelope_cgs = [empty_cg, full_fuel_no_payload_cg, full_payload_full_fuel_cg, full_payload_no_fuel_cg, empty_cg]
+    envelope_weights = [empty_weight, full_fuel_no_payload_weight, full_payload_full_fuel_weight, full_payload_no_fuel_weight, empty_weight]
+    plt.plot(envelope_cgs, envelope_weights, 'k--', linewidth=2, label='CG Envelope')
+
+    # Fill the envelope area
+    plt.fill(envelope_cgs, envelope_weights, alpha=0.1, color='blue')
+
+    # Mark the extreme points
+    plt.plot(empty_cg, empty_weight, 'ko', markersize=8)
+    plt.plot(full_fuel_no_payload_cg, full_fuel_no_payload_weight, 'ko', markersize=8)
+    plt.plot(full_payload_no_fuel_cg, full_payload_no_fuel_weight, 'ko', markersize=8)
+    plt.plot(full_payload_full_fuel_cg, full_payload_full_fuel_weight, 'ko', markersize=8)
+
+    # Add text labels for extreme points
+    plt.annotate('Empty', (empty_cg, empty_weight), textcoords="offset points", xytext=(0,10), ha='center')
+    plt.annotate('Full Fuel\nNo Payload', (full_fuel_no_payload_cg, full_fuel_no_payload_weight), 
+                textcoords="offset points", xytext=(0,10), ha='center')
+    plt.annotate('Full Payload\nNo Fuel', (full_payload_no_fuel_cg, full_payload_no_fuel_weight), 
+                textcoords="offset points", xytext=(0,10), ha='center')
+    plt.annotate('Full Payload\nFull Fuel', (full_payload_full_fuel_cg, full_payload_full_fuel_weight), 
+                textcoords="offset points", xytext=(0,10), ha='center')
+
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.xlabel('CG Position (ft from nose)')
+    plt.ylabel('Aircraft Weight (lbs)')
+    plt.title('Aircraft CG Envelope (Including Pilot and Battery)')
+    plt.legend(loc='upper right')
+
+    # Display the plots
+    plt.tight_layout()
+    plt.show()
+
+    # Calculate total weight variation
+    min_weight = operating_empty_weight
+    max_weight = operating_empty_weight + max_payload + max_fuel
+    print(f"Aircraft Weight Range: {min_weight:.2f} to {max_weight:.2f} lbs")
+
+    # Calculate CG variation
+    min_cg = min(empty_cg, full_fuel_no_payload_cg, full_payload_no_fuel_cg, full_payload_full_fuel_cg)
+    max_cg = max(empty_cg, full_fuel_no_payload_cg, full_payload_no_fuel_cg, full_payload_full_fuel_cg)
+    print(f"CG Range: {min_cg:.2f} to {max_cg:.2f} ft from nose")
+    print(f"CG Travel: {max_cg - min_cg:.2f} ft")
+
+    # Calculate CG as percentage of mean aerodynamic chord (MAC)
+    # Assuming wing MAC is approximately 7.46 inches (from x_wing calculation)
+    wing_MAC = 7.46
+    wing_leading_edge = 7.71  # Distance from nose to wing leading edge
+    cg_percent_mac = [(cg - wing_leading_edge) / wing_MAC * 100 for cg in [min_cg, max_cg]]
+    print(f"CG Range as % of MAC: {cg_percent_mac[0]:.2f}% to {cg_percent_mac[1]:.2f}%")
+
+
+def CarpetPlots():
+    data = {
+    1.2: {
+        225: [2305.948585, 8713.58],
+        275: [1815.972758, 8759.04],
+        325: [1497.901593, 8801.68],
+        375: [1275.572816, 8842.06],
+        425: [1111.749981, 8880.59],
+        475: [986.1750993, 8917.56],
+        525: [886.9226719, 8953.18],
+    },
+    1.3: {
+        225: [2083.730736, 8713.58],
+        275: [1645.63628, 8759.04],
+        325: [1360.305998, 8801.68],
+        375: [1160.337173, 8842.06],
+        425: [1012.672417, 8880.59],
+        475: [899.2794212, 8917.56],
+        525: [809.518593, 8953.18],
+    },
+    1.4: {
+        225: [1899.206084, 8713.58],
+        275: [1503.698905, 8759.04],
+        325: [1245.334683, 8801.68],
+        375: [1063.834076, 8842.06],
+        425: [929.5473457, 8880.59],
+        475: [826.2613778, 8917.56],
+        525: [744.3898963, 8953.18],
+    },
+    1.5: {
+        225: [1743.725736, 8713.58],
+        275: [1383.721953, 8759.04],
+        325: [1147.908809, 8801.68],
+        375: [981.8932245, 8842.06],
+        425: [858.8485379, 8880.59],
+        475: [764.0721686, 8917.56],
+        525: [688.8542095, 8953.18],
+    },
+    1.6: {
+        225: [1611.063237, 8713.58],
+        275: [1281.054272, 8759.04],
+        325: [1064.349087, 8801.68],
+        375: [911.4862195, 8842.06],
+        425: [798.0100089, 8880.59],
+        475: [710.4892415, 8917.56],
+        525: [640.9530258, 8953.18],
+    },
+    1.7: {
+        225: [1496.630059, 8713.58],
+        275: [1192.257259, 8759.04],
+        325: [991.9282021, 8801.68],
+        375: [850.363214, 8842.06],
+        425: [745.1218116, 8880.59],
+        475: [663.8555491, 8917.56],
+        525: [599.2240556, 8953.18],
+    },
+    1.8: {
+        225: [1396.975263, 8713.58],
+        275: [1114.737043, 8759.04],
+        325: [928.5837488, 8801.68],
+        375: [796.819338, 8842.06],
+        425: [698.734089, 8880.59],
+        475: [622.9113012, 8917.56],
+        525: [562.5541035, 8953.18],
+    },
+    1.9: {
+        225: [1309.45674, 8713.58],
+        275: [1046.502094, 8759.04],
+        325: [872.728584, 8801.68],
+        375: [749.5400615, 8842.06],
+        425: [657.7271083, 8880.59],
+        475: [586.6821869, 8917.56],
+        525: [530.0811828, 8953.18],
+    },
+    2.0: {
+        225: [1232.019453, 8713.58],
+        275: [985.9992751, 8759.04],
+        325: [823.1222575, 8801.68],
+        375: [707.4961471, 8842.06],
+        425: [621.2228184, 8880.59],
+        475: [554.4031933, 8917.56],
+        525: [501.1277111, 8953.18],
+    }
+}
+
+    # Constants for induced drag calculation
+    span = 59  # ft
+    e = 0.85   # Oswald efficiency factor
+    pi = np.pi
+
+    # Extract unique C_Lmax and S_ref values
+    c_lmax_values = sorted(data.keys())
+    s_ref_values = sorted(data[c_lmax_values[0]].keys())
+
+    # Prepare data for plotting
+    df_list = []
+    for c_lmax in c_lmax_values:
+        for s_ref in s_ref_values:
+            s_to = data[c_lmax][s_ref][0]
+            w_to = data[c_lmax][s_ref][1]
+            wing_loading = w_to / s_ref
+            
+            # Calculate aspect ratio for this reference area
+            AR = span**2 / s_ref
+            
+            # Calculate induced drag coefficient using the takeoff lift coefficient (C_Lmax)
+            Cdi = c_lmax**2 / (pi * AR * e)
+            
+            df_list.append({
+                'S_TO': s_to,
+                'Wing_Loading': wing_loading,
+                'S_ref': s_ref,
+                'C_Lmax': c_lmax,
+                'AR': AR,
+                'Cdi': Cdi
+            })
+
+    # Convert to DataFrame
+    df = pd.DataFrame(df_list)
+
+    # Create better figure with specific style
+    plt.figure(figsize=(14, 10))
+    plt.style.use('seaborn-v0_8-whitegrid')
+
+    # Create colormap for C_Lmax lines - using a nicer color scheme
+    cmap = plt.cm.plasma
+    colors = cmap(np.linspace(0, 1, len(c_lmax_values)))
+
+    # Plot constant C_Lmax lines (solid colored lines)
+    c_lmax_lines = []  # Store lines for legend
+    for i, c_lmax in enumerate(c_lmax_values):
+        subset = df[df['C_Lmax'] == c_lmax]
+        
+        # Sort by Cdi for proper line connection
+        subset = subset.sort_values('Cdi')
+        
+        # Plot the line with color from colormap
+        line, = plt.plot(subset['Cdi'], subset['S_TO'], '-', 
+                        linewidth=2, color=colors[i], marker='o', markersize=4)
+        
+        # Store line for legend
+        c_lmax_lines.append(line)
+
+    # Plot constant S_ref lines (dashed black lines)
+    for s_ref in s_ref_values:
+        subset = df[df['S_ref'] == s_ref]
+        
+        # Sort by C_Lmax for proper connection
+        subset = subset.sort_values('C_Lmax')
+        
+        # Plot with dashed line
+        plt.plot(subset['Cdi'], subset['S_TO'], '--', 
+                linewidth=1, color='black', alpha=0.6)
+        
+        # Label S_ref line on the leftmost point (highest C_Lmax value has lowest Cdi)
+        last_point = subset.iloc[-1]  # Point with highest C_Lmax
+        
+        plt.annotate(f"$S_{{ref}}={int(s_ref)}$ $ft^2$",
+                    xy=(last_point['Cdi'], last_point['S_TO']),
+                    xytext=(10, 0), textcoords='offset points',
+                    fontsize=9, ha='left', 
+                    bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.7))
+        
+    # Create legend for C_Lmax values
+    c_lmax_labels = [f"$C_{{Lmax}}={c_l}$" for c_l in c_lmax_values]
+    legend = plt.legend(c_lmax_lines, c_lmax_labels, title="Maximum Lift Coefficient", 
+                    loc='center left', bbox_to_anchor=(1.02, 0.5), 
+                    fontsize=10, frameon=True, title_fontsize=12)
+    legend.get_frame().set_alpha(0.9)
+    legend.get_frame().set_edgecolor('gray')
+
+    # Plot customization
+    plt.xlabel('Induced Drag Coefficient ($C_{di}$)', fontsize=12, fontweight='bold')
+    plt.ylabel('Take-off Distance ($S_{TO}$) [ft]', fontsize=12, fontweight='bold')
+    plt.title('Carpet Plot: Take-off Distance vs Induced Drag Coefficient', 
+            fontsize=14, fontweight='bold', pad=15)
+
+    # Add grid
+    plt.grid(True, linestyle='--', alpha=0.7)
+
+    # Adjust layout to make room for legend
+    plt.tight_layout()
+    plt.subplots_adjust(right=0.85)
+
+    # Set axis limits with some padding
+    plt.xlim(min(df['Cdi'])*0.95, max(df['Cdi'])*1.05)
+    plt.show()
+
+    # Define CD0 and AR values
+    cd0_vals = np.array([0.005, 0.01, 0.015, 0.02, 0.025, 0.03])
+    AR_vals = np.array([2.5, 5, 7.5, 10, 12.5])
+
+    # Wing Loading (W/S) data: rows = AR, columns = CD0
+    WS = np.array([
+        [14.41, 20.38, 24.96, 28.82, 32.22, 35.30],
+        [20.38, 28.82, 35.30, 40.76, 45.57, 49.92],
+        [24.96, 35.30, 43.23, 49.92, 55.81, 61.14],
+        [28.82, 40.76, 49.92, 57.64, 64.44, 70.59],
+        [32.22, 45.57, 55.81, 64.44, 72.05, 78.93]
+    ])
+
+    # Lift-to-Drag Ratio (L/D) data
+    LD = np.array([
+        [18.00, 12.73, 10.39, 9.00, 8.05, 7.35],
+        [25.45, 18.00, 14.70, 12.73, 11.38, 10.39],
+        [31.18, 22.04, 18.00, 15.59, 13.94, 12.73],
+        [36.00, 25.45, 20.78, 18.00, 16.10, 14.70],
+        [40.25, 28.46, 23.24, 20.12, 18.00, 16.43]
+    ])
+
+    # Plot constant CD0 lines (black solid)
+    for j in range(len(cd0_vals)):
+        ws_col = WS[:, j]
+        ld_col = LD[:, j]
+        plt.plot(ws_col, ld_col, 'ko-', linewidth=1)
+        # Label at end of each line (last point, highest AR)
+        plt.text(ws_col[-1] + 1, ld_col[-1]+0.5, f'$C_{{D_0}}={cd0_vals[j]:.3f}$',
+                fontsize=9, color='black', va='center')
+
+    # Plot constant AR lines (blue dashed)
+    for i in range(len(AR_vals)):
+        ws_row = WS[i, :]
+        ld_row = LD[i, :]
+        plt.plot(ws_row, ld_row, 'bo-', linewidth=1)
+        # Label at end of each line (last point, highest CD0)
+        plt.text(ws_row[-1] + .5, ld_row[-1] - 1, f'AR={AR_vals[i]:.1f}',
+                fontsize=9, color='blue', va='center')
+
+    # Plot customization
+    plt.xlabel('Wing Loading (W/S) [lb/ft²]')
+    plt.ylabel('Lift-to-Drag Ratio (L/D)')
+    plt.title('Carpet Plot of L/D vs Wing Loading')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+CarpetPlots()
+CGCalculation()
